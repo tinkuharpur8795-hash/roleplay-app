@@ -2177,10 +2177,11 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         aren't the web UI's SSE connection (Telegram webhook, in this case).
         Reads/writes the chat directly from MongoDB.
         """
-        FALLBACK_MODEL = "Groq LLaMA 3.3 70B  (Brain)"
+        # Read fallback model from environment variable with safe default
+        FALLBACK_MODEL = os.getenv("TELEGRAM_FALLBACK_MODEL", "Groq LLaMA 3.3 70B  (Brain)").strip()
 
         if not model_choice:
-            model_choice = list(self.MODEL_OPTIONS.keys())[0]
+            model_choice = os.getenv("TELEGRAM_PRIMARY_MODEL", list(self.MODEL_OPTIONS.keys())[0]).strip()
 
         char_prompt = self.CHARACTERS.get(character, "")
         if not char_prompt:

@@ -769,10 +769,7 @@ def cron_proactive_check():
 # ══════════════════════════════════════════════════════════════════
 TELEGRAM_CHARACTER    = os.environ.get("TELEGRAM_CHARACTER", "").strip()
 TELEGRAM_CHAT_ID_APP  = os.environ.get("TELEGRAM_CHAT_ID_APP", "").strip()
-TELEGRAM_CHARACTER    = os.environ.get("TELEGRAM_CHARACTER", "").strip()
-TELEGRAM_CHAT_ID_APP  = os.environ.get("TELEGRAM_CHAT_ID_APP", "").strip()
-TELEGRAM_MODEL        = os.environ.get("TELEGRAM_MODEL", "Cloud Mistral Nemo  (Chat)").strip()
-
+TELEGRAM_MODEL        = os.environ.get("TELEGRAM_PRIMARY_MODEL", os.environ.get("TELEGRAM_MODEL", "Cloud Mistral Nemo  (Chat)")).strip()
 @app.route("/telegram/webhook", methods=["POST"])
 def telegram_webhook():
     try:
