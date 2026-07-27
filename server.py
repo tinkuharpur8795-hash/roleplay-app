@@ -727,28 +727,7 @@ def cron_morning_message():
 #     curl -H "Authorization: Bearer <COMPANION_API_TOKEN>" \
 #          "https://<your-app>.pythonanywhere.com/cron/proactive_check?character=<name>&chat_id=<id>"
 # ══════════════════════════════════════════════════════════════════
-@app.route("/cron/proactive_check", methods=["GET", "POST"])
-@require_api_token
-def cron_proactive_check():
-    character = request.args.get("character", "")
-    chat_id   = request.args.get("chat_id", "")
-    model     = request.args.get("model", list(backend.MODEL_OPTIONS.keys())[0])
 
-    if not character or not chat_id:
-        return jsonify({"status": "error", "message": "character and chat_id are required."}), 400
-
-    try:
-        due = backend.check_and_send_due_proactive_messages(character, chat_id, model)
-        results = []
-        for kind, text in due:
-            sent = send_telegram_message(text)
-            print(f"[💌 PROACTIVE] {kind} generated for {character}/{chat_id} — Telegram sent: {sent}")
-            results.append({"kind": kind, "sent": sent, "text": text})
-        return jsonify({"status": "ok", "fired": results})
-    except Exception as e:
-        print(f"[⚠️ PROACTIVE] cron_proactive_check() failed:\n{traceback.format_exc()}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-        
 @app.route("/cron/proactive_check", methods=["GET", "POST"])
 @require_api_token
 def cron_proactive_check():
