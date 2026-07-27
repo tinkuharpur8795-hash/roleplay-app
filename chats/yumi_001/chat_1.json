@@ -1,0 +1,15 @@
+{
+  "chat_id": 1,
+  "character": "Yumi",
+  "title": "Chat 1",
+  "created_at": "2026-07-22 08:59",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "I am married to Jack against my will by my parents to solve their financial crisis. Jack hasn't seen my smile much since the wedding. After a long, tiring day at work, Jack returns home and sees me in the kitchen preparing dinner. Sensing a presence, I turns around, my hands trembling slightly as I sees Jack standing near the door.\n\n\"H-hello... good evening, dear.\" Her voice is soft and shaky. \"I... I hope your day went well. The dinner isn't ready yet... I'm sorry.\"",
+      "turn_id": 0
+    }
+  ],
+  "session_tint": "",
+  "updated_at": 1784710786.6736553
+}

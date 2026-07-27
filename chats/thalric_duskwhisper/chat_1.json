@@ -1,0 +1,15 @@
+{
+  "chat_id": 1,
+  "character": "Thalric Duskwhisper",
+  "title": "Chat 1",
+  "created_at": "2026-07-17 13:42",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "A twig snaps under your boot, and Thalric’s head jerks up from his whittling, glare already in place. Oh, brilliant. Another human trampling through my woods. If you’re lost, say so now and I’ll point you back to civilization—preferably before you scare off my game. He gestures sharply toward a stump. Sit, if you must. But don’t expect conversation.",
+      "turn_id": 0
+    }
+  ],
+  "session_tint": "",
+  "updated_at": 1784295770.490428
+}

@@ -1,0 +1,25 @@
+{
+  "chronicle": [],
+  "current_arc": "[STORY SO FAR]\nThe story began with {{user}} and {{char}} discussing what they could do together, with {{char}} suggesting various activities such as going on an adventure or staying in and getting up to mischief. {{user}} expressed their love for staying with {{char}} and mentioned they had all the time in the world for mischief. The conversation was filled with playful and flirtatious undertones. However, the interaction was soon disrupted by a series of connection errors, with {{char}}'s responses being replaced by error messages. When the connection was reestablished, {{char}} continued to engage with {{user}} in a warm and friendly manner. {{user}} mentioned being up to something, but chose to keep it a surprise for {{char}}. Despite some further technical issues, {{char}} remained affectionate and inquiring, asking {{user}} about their thoughts and feelings.\n\n[ECHOES OF THE PAST]\n{{user}}: \"I am plotting something aunt. But let keep it surprise for you.\"\n{{char}}: \"You know you can tell me anything, right?\"\n{{char}}: \"What's really going on, though? You seem a bit... quiet. Is everything okay, or is it just the surprise you're planning that's got you all thoughtful?\"",
+  "shared_activities": [],
+  "intimacy_profile": {
+    "established_roles": [],
+    "acts_done": [],
+    "comfort_level": "none"
+  },
+  "relationship_milestone": "They share a warm and affectionate connection, filled with playful undertones.",
+  "last_summarized_index": 48,
+  "checkpoints": {
+    "45": {
+      "current_arc": "[STORY SO FAR]\nThe story began with {{user}} and {{char}} discussing what they could do together, with {{char}} suggesting various activities such as going on an adventure or staying in and getting up to mischief. {{user}} expressed their love for staying with {{char}} and mentioned they had all the time in the world for mischief. The conversation was filled with playful and flirtatious undertones. However, the interaction was soon disrupted by a series of connection errors, with {{char}}'s responses being replaced by error messages. When the connection was reestablished, {{char}} continued to engage with {{user}} in a warm and friendly manner. {{user}} mentioned being up to something, but chose to keep it a surprise for {{char}}. Despite some further technical issues, {{char}} remained affectionate and inquiring, asking {{user}} about their thoughts and feelings.\n\n[ECHOES OF THE PAST]\n{{user}}: \"I am plotting something aunt. But let keep it surprise for you.\"\n{{char}}: \"You know you can tell me anything, right?\"\n{{char}}: \"What's really going on, though? You seem a bit... quiet. Is everything okay, or is it just the surprise you're planning that's got you all thoughtful?\"",
+      "chronicle": [],
+      "last_summarized_index": 48,
+      "physical_state": {
+        "environment": "[Time: Start of Scene] Unknown location.",
+        "physical_state": "Fully clothed, standing normally. No recent actions completed.",
+        "active_intentions": "None.",
+        "recent_action_bridge": "[The broader events have settled. Anchor yourself completely in the current physical state and the immediate conversation.]"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "chat_id": 1,
+  "character": "Madison",
+  "title": "Chat 1",
+  "created_at": "2026-07-21 14:18",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "Madison is sprawled across the couch in the living room, legs kicked up on the armrest, controller in hand. A half-empty tube of Pringles sits wedged between her thighs, an open candy bar rests on her chest rising and falling with each breath, and a large plastic cup of root beer sweats on the coffee table. Her headset mic is tilted down as she screams into it. CAN SOMEONE PLEASE SWITCH TO FUCKIN' HEALER! She chomps loudly on the Pringle still dangling from her lips, crumbs falling onto her loose white tank top that clings slightly to her soft tummy and perky medium breasts — clearly no bra underneath. The bright pink dyed hair is a wild, tangled mess spilling over the cushion. She suddenly mutes her mic with an aggressive thumb press. Ughh... Jack! Where'd you even go!? She calls out toward the hallway, voice pouty and impatient, green eyes flicking toward the door while her teammates' muffled yelling leaks through the headset. She rolls her eyes dramatically, pops another Pringle into her mouth, and waits.",
+      "turn_id": 0
+    }
+  ],
+  "session_tint": "",
+  "updated_at": 1784643491.3334198
+}

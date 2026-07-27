@@ -1,0 +1,283 @@
+"""
+expectation_memory.py - Reminders / follow-ups (companion "how did it go?" hooks)
+
+Phase 2 note: this used to store each chat's expectations in its own file
+(`{character}_{chat}_expectations.json`) via its own locking and I/O. That
+file turned out to be fully orphaned - this class was never imported or
+called anywhere in app_backend.py. As part of the Phase 2 memory refactor,
+storage was moved to live inside the consolidated CompanionMemoryStore
+record (see memory_store.py, under the "reminders" key), removing one more
+entry from the scattered-files list.
+
+Phase 5 note (this revision): the original version only ever fired a
+reminder in response to keyword overlap in the user's NEXT message, plus a
+turn-count "impatience" score. Two problems for a caring companion bot:
+
+  1. Turn count doesn't move while the user is away — which is exactly when
+     a real-world due date (an exam "tomorrow", a call "tonight") passes.
+     A bot that only gets more impatient per-turn will sit on "how did the
+     exam go?" indefinitely if the user goes quiet for a day.
+  2. It could only ever react inside a live reply — it had no way to be the
+     THING that starts a proactive morning/evening/random ping, only to
+     react if the user happened to bring up matching words.
+
+This revision adds a wall-clock `due_at` per expectation and a dedicated
+get_due_followups() the proactive-message path can poll directly, so the
+bot can genuinely initiate "hey, how did that go?" at the right real-world
+moment. check_expectation_trigger() (the original live-chat, reactive path)
+is kept and still works off keyword overlap for in-conversation nudges, but
+no longer requires per-turn impatience to build up — a follow-up whose
+due_at has already passed is eligible immediately.
+
+The public API is backward compatible: store_expectation and
+check_expectation_trigger keep their original required arguments, only
+gaining new optional ones.
+"""
+
+import time
+import re
+import threading
+import random
+import string
+
+
+# Rough, deliberately simple mapping from the free-text phrase a future-event
+# regex matched (see memory_context.py's _FUTURE_EVENT_PATTERNS) to "how long
+# from now should this become due". A caring check-in should land AFTER the
+# event, not at the moment it's mentioned — asking "how did the exam go?"
+# only makes sense once there's been time for the exam to happen.
+_TIME_PHRASE_DELAYS = {
+    "tonight": 6 * 3600,
+    "tomorrow": 26 * 3600,          # a bit past 24h so it's clearly "after"
+    "this week": 3 * 86400,
+    "this weekend": 3 * 86400,
+    "next week": 8 * 86400,
+}
+_DEFAULT_DELAY_SECONDS = 22 * 3600   # "wish me luck" / unspecified — ~next day
+_FOLLOWUP_COOLDOWN_SECONDS = 12 * 3600  # don't resurface the same one twice in one push
+_MAX_REMINDERS_BEFORE_FADE = 3       # a caring bot lets it go instead of nagging forever
+
+
+def infer_due_seconds(matched_phrase_context):
+    """
+    Best-effort: given the raw text that triggered a future-event match,
+    figure out roughly how many seconds from now the follow-up should
+    become due. Falls back to _DEFAULT_DELAY_SECONDS if nothing matches.
+    Kept as a plain function (not a method) so callers building the
+    expectation elsewhere — e.g. memory_context.py's
+    _maybe_store_expectation — can reuse it without an instance.
+    """
+    lower = (matched_phrase_context or "").lower()
+    for phrase, delay in _TIME_PHRASE_DELAYS.items():
+        if phrase in lower:
+            return delay
+    if "next " in lower:  # "next tuesday", "next month", etc.
+        return 8 * 86400
+    return _DEFAULT_DELAY_SECONDS
+
+
+class ExpectationMemory:
+    def __init__(self, memory_store, max_expectations=15):
+        self.memory_store = memory_store
+        self.max_expectations = max_expectations
+        self.lock = threading.Lock()
+
+    def get_expectations(self, character_id, chat_id):
+        record = self.memory_store.load(character_id, chat_id)
+        return record.get("reminders", [])
+
+    def store_expectation(self, character_id, chat_id, text, trigger_words, current_turn,
+                           importance=2, due_in_seconds=None, kind="follow_up"):
+        """
+        `due_in_seconds`: when this becomes eligible for a proactive
+        check-in (see get_due_followups). Pass None to skip time-based
+        eligibility entirely and rely only on the reactive keyword-overlap
+        path (legacy behavior) — but for anything a caring bot should
+        actively bring up (an exam, an interview, a doctor's appointment),
+        callers should pass this, using infer_due_seconds() as a starting
+        point.
+
+        `kind`: "follow_up" (default) — a caring check-in, e.g. "how did
+        the exam go?". "watch" — the original use case, an internal
+        motivation the character keeps in mind and may bring up if the
+        conversation contradicts it, but isn't itself something to
+        proactively ping about.
+        """
+        with self.lock:
+            record = self.memory_store.load(character_id, chat_id)
+            expectations = record.setdefault("reminders", [])
+
+            active = [e for e in expectations if e["status"] == "pending"]
+            if len(active) >= self.max_expectations:
+                active.sort(key=lambda x: (x.get("importance", 2), x.get("turn_created", 0)))
+                target_id = active[0]["id"]
+                for e in expectations:
+                    if e["id"] == target_id:
+                        e["status"] = "dropped"
+                        break
+
+            now_ts = time.time()
+            suffix = ''.join(random.choices(string.ascii_lowercase, k=3))
+            new_exp = {
+                "id": f"exp_{int(now_ts)}_{current_turn}_{suffix}",
+                "text": text,
+                "status": "pending",
+                "trigger_words": [w.lower() for w in trigger_words],
+                "turn_created": current_turn,
+                "created_at": now_ts,
+                "last_reminded_turn": 0,
+                "last_reminded_ts": 0,
+                "reminder_count": 0,
+                "importance": importance,
+                "kind": kind,
+                "due_at": (now_ts + due_in_seconds) if due_in_seconds is not None else None,
+            }
+            expectations.append(new_exp)
+            self.memory_store.save(character_id, chat_id, record)
+            return new_exp["id"]
+
+    def get_due_followups(self, character_id, chat_id, now_ts=None, limit=1):
+        """
+        Time-aware, non-reactive check — this is what the PROACTIVE message
+        path (morning/evening/random pings) should call, instead of feeding
+        an empty user_text into check_expectation_trigger. Returns pending
+        follow-ups whose due_at has passed (wall-clock, not turn count), so
+        the bot can genuinely initiate "how did that go?" rather than
+        waiting for the user to say a matching word first.
+
+        Respects a cooldown so the same follow-up isn't resurfaced on every
+        single proactive push, and lets a follow-up fade after being
+        surfaced _MAX_REMINDERS_BEFORE_FADE times without resolution — a
+        caring bot checks in, it doesn't nag indefinitely.
+        """
+        now_ts = now_ts if now_ts is not None else time.time()
+        with self.lock:
+            record = self.memory_store.load(character_id, chat_id)
+            expectations = record.get("reminders", [])
+
+            candidates = []
+            for exp in expectations:
+                if exp.get("status") != "pending":
+                    continue
+                if exp.get("kind", "follow_up") != "follow_up":
+                    continue  # "watch"-kind expectations are reactive-only, not proactive pings
+                due_at = exp.get("due_at")
+                if due_at is None or now_ts < due_at:
+                    continue
+                if now_ts - exp.get("last_reminded_ts", 0) < _FOLLOWUP_COOLDOWN_SECONDS:
+                    continue
+                candidates.append(exp)
+
+            if not candidates:
+                return []
+
+            # Higher importance first; among equals, whichever became due earliest.
+            candidates.sort(key=lambda e: (-e.get("importance", 2), e.get("due_at") or 0))
+            selected = candidates[:max(1, limit)]
+
+            for exp in selected:
+                exp["last_reminded_ts"] = now_ts
+                exp["reminder_count"] = exp.get("reminder_count", 0) + 1
+                if exp["reminder_count"] >= _MAX_REMINDERS_BEFORE_FADE:
+                    exp["status"] = "faded"
+
+            self.memory_store.save(character_id, chat_id, record)
+            return selected
+
+    def check_expectation_trigger(self, character_id, chat_id, user_text, current_turn):
+        """
+        Reactive, live-chat path: fires when the user's own message overlaps
+        with an expectation's trigger words, OR when a time-based follow-up
+        has already become due (due_at passed) even without a keyword match
+        — so if the user happens to message during a live conversation
+        after the due date, the bot doesn't need the exact right words to
+        bring it up. Turn-based "impatience" is kept as a fallback only for
+        expectations stored without a due_at (kind="watch" or legacy data).
+        """
+        with self.lock:
+            record = self.memory_store.load(character_id, chat_id)
+            expectations = record.get("reminders", [])
+
+            user_words = set(re.findall(r'\b[a-zA-Z]{3,}\b', (user_text or "").lower()))
+            now_ts = time.time()
+
+            best_candidate = None
+            highest_score = -1
+            candidate_index = -1
+
+            for e_idx, exp in enumerate(expectations):
+                if exp["status"] != "pending":
+                    continue
+                if current_turn - exp.get("last_reminded_turn", 0) < 10:
+                    continue
+                if now_ts - exp.get("last_reminded_ts", 0) < _FOLLOWUP_COOLDOWN_SECONDS:
+                    continue
+
+                overlap = len(set(exp.get("trigger_words", [])).intersection(user_words))
+
+                due_at = exp.get("due_at")
+                if due_at is not None:
+                    # Time-based eligibility: already due = strongly eligible
+                    # regardless of keyword overlap.
+                    time_score = 2 if now_ts >= due_at else 0
+                else:
+                    # Legacy/undated expectations fall back to turn-based impatience.
+                    turns_waiting = current_turn - exp.get("turn_created", 0)
+                    importance = exp.get("importance", 2)
+                    time_score = 0
+                    if importance == 3 and turns_waiting >= 3:
+                        time_score = 2
+                    elif importance == 2 and turns_waiting >= 6:
+                        time_score = 1
+
+                total_score = overlap + time_score
+                if total_score > 0 and total_score > highest_score:
+                    highest_score = total_score
+                    best_candidate = exp
+                    candidate_index = e_idx
+
+            if best_candidate is None or candidate_index == -1:
+                return None
+
+            expectations[candidate_index]["last_reminded_turn"] = current_turn
+            expectations[candidate_index]["last_reminded_ts"] = now_ts
+            expectations[candidate_index]["reminder_count"] = expectations[candidate_index].get("reminder_count", 0) + 1
+            if expectations[candidate_index]["reminder_count"] >= _MAX_REMINDERS_BEFORE_FADE:
+                expectations[candidate_index]["status"] = "faded"
+            self.memory_store.save(character_id, chat_id, record)
+
+            return self.format_hint(best_candidate)
+
+    def format_hint(self, exp):
+        """
+        Shared phrasing for both the reactive and proactive paths. Kept
+        caring/curious rather than the original "complain" framing — the
+        point is a bot that remembers and checks in, not one that's
+        keeping score. Public — callers (e.g. the proactive-message path in
+        app_backend.py, which gets an expectation dict back from
+        get_due_followups) use this directly rather than reaching into a
+        private method.
+        """
+        if exp.get("kind") == "watch":
+            return (
+                f"INTERNAL MOTIVATION: I'm keeping in mind that '{exp['text']}'. "
+                "If the current situation contradicts this, I should naturally bring it up or ask about it."
+            )
+        return (
+            f"INTERNAL MOTIVATION: I've been meaning to {exp['text']}. "
+            "I genuinely care about this and should bring it up naturally, warmly, "
+            "the way someone who actually remembered would — not as an interrogation."
+        )
+
+    def resolve_expectation(self, character_id, chat_id, exp_id, new_status="fulfilled"):
+        with self.lock:
+            record = self.memory_store.load(character_id, chat_id)
+            expectations = record.get("reminders", [])
+            updated = False
+            for exp in expectations:
+                if exp["id"] == exp_id:
+                    exp["status"] = new_status
+                    updated = True
+                    break
+            if updated:
+                self.memory_store.save(character_id, chat_id, record)

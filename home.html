@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MultiChat AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+    :root {
+        /* Matches index.html's --font-ui exactly. Scoped to the sidebar
+           only (below) — the rest of this page keeps its existing font
+           so this doesn't become a full page restyle, just sidebar parity. */
+        --font-ui-shared: 'Syne', sans-serif;
+        --bg-page:        #000000;
+        --bg-sidebar:     #050505;
+        --bg-card:        #111111;
+        --bg-active:      #1A1A1A;
+        --bg-hover:       #15151A;
+        --border-color:   #1F1F28;
+        --text-primary:   #E4E4E5;
+        --text-secondary: #A0A0A0;
+        --text-muted:     #8A8A93;
+        --radius-card:    14px;
+        --radius-avatar:  10px;
+        --radius-pill:    10px;
+        --shadow-card:    0 1px 2px rgba(0,0,0,0.3), 0 2px 10px rgba(0,0,0,0.25);
+        --shadow-card-hover: 0 2px 4px rgba(0,0,0,0.35), 0 8px 20px rgba(0,0,0,0.4);
+        --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    .hidden { display: none !important; }
+
+    body {
+        font-family: var(--font-ui);
+        background: var(--bg-page);
+        color: var(--text-primary);
+        height: 100vh;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===================== SHELL ===================== */
+    .app-shell {
+        display: flex;
+        height: 100%;
+    }
+
+    /* ===================== SIDEBAR ===================== */
+    .sidebar {
+        width: 240px;
+        flex-shrink: 0;
+        background: var(--bg-sidebar);
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        padding: 22px 16px;
+        font-family: var(--font-ui-shared);
+    }
+
+    .brand {
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        padding: 0 8px;
+        margin-bottom: 24px;
+    }
+
+    .nav-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 10px 10px;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .nav-item svg { flex-shrink: 0; opacity: 0.8; }
+
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    .nav-item.active {
+        background: var(--bg-active);
+        color: var(--text-primary);
+    }
+
+    /* Mobile-only floating "Chats" pill — see @media block below for
+       when it's actually shown. Hidden on desktop, where the sidebar's
+       own "Chats" nav item is used instead. */
+    .mobile-chats-btn {
+        display: none;
+        position: fixed;
+        top: calc(16px + env(safe-area-inset-top, 0px));
+        right: calc(16px + env(safe-area-inset-right, 0px));
+        z-index: 100;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-active);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        font-family: var(--font-ui);
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 9px 18px;
+        border-radius: 999px;
+        cursor: pointer;
+        box-shadow: var(--shadow-card);
+    }
+
+    .mobile-chats-btn:hover {
+        background: var(--bg-hover);
+    }
+
+    .sidebar-footer {
+        margin-top: auto;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .user-profile-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        border: 1px solid var(--border-color);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 10px 12px;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+
+    .user-profile-btn:hover { background: var(--bg-hover); }
+
+    .user-profile-btn .avatar-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--bg-active);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* ===================== MAIN ===================== */
+    .main {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 36px;
+        overflow-y: auto;
+    }
+
+    .search-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 640px;
+        margin: 0 auto 28px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-pill);
+        padding: 11px 16px;
+        box-shadow: var(--shadow-card);
+    }
+
+    .search-bar svg { color: var(--text-muted); flex-shrink: 0; }
+
+    .search-bar input {
+        flex: 1;
+        border: none;
+        outline: none;
+        background: transparent;
+        font-family: var(--font-ui);
+        font-size: 0.9rem;
+        color: var(--text-primary);
+    }
+
+    .search-bar input::placeholder { color: var(--text-muted); }
+
+    /* ===================== CHARACTER GRID ===================== */
+    .character-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 20px;
+        max-width: 1180px;
+        margin: 0 auto;
+    }
+
+    .character-card {
+        position: relative;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: var(--shadow-card);
+        transition: box-shadow 0.15s ease, transform 0.15s ease;
+        aspect-ratio: 3 / 4.3;
+    }
+
+    .character-card:hover {
+        box-shadow: var(--shadow-card-hover);
+        transform: translateY(-1px);
+    }
+
+    .character-avatar {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 2rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        overflow: hidden;
+    }
+
+    .character-avatar-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Name + description sit directly on top of the portrait, inside a
+       bottom-anchored scrim so the text stays legible over any image. */
+    .character-overlay {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1;
+        padding: 34px 14px 12px;
+        background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.72) 40%, rgba(0,0,0,0) 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        pointer-events: none;
+    }
+
+    /* ===================== EDIT BUTTON ===================== */
+    /* Hidden by default — only revealed once "Edit Character" in the
+       sidebar is toggled on (adds .edit-mode to #character-grid). */
+    .edit-char-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(0,0,0,0.55);
+        color: #fff;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2;
+        transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    .character-grid.edit-mode .edit-char-btn {
+        display: flex;
+    }
+
+    .edit-char-btn:hover {
+        background: rgba(0,0,0,0.82);
+        transform: scale(1.07);
+    }
+
+    .edit-char-btn svg { display: block; }
+
+    /* Edit mode gives cards a subtle "wiggle-able" affordance cue —
+       just a ring, no motion, so it doesn't fight the hover lift. */
+    .character-grid.edit-mode .character-card {
+        outline: 1px dashed var(--border-color);
+        outline-offset: -1px;
+    }
+
+    /* ===================== EDIT MODAL ===================== */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.65);
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 20px;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-box {
+        width: 100%;
+        max-width: 560px;
+        max-height: 88vh;
+        background: var(--bg-card);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card-hover);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+    }
+
+    .modal-header h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .modal-close-btn {
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 1.3rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+
+    .modal-close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    .modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .modal-avatar-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .modal-avatar-preview-wrap {
+        width: 64px;
+        height: 64px;
+        border-radius: var(--radius-avatar);
+        overflow: hidden;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #3a3a3f, #6d6d75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 600;
+        position: relative;
+    }
+
+    .modal-avatar-preview-wrap img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+    }
+
+    .modal-avatar-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .file-upload-btn {
+        display: inline-block;
+        width: fit-content;
+        border: 1px solid var(--border-color);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        font-family: var(--font-ui);
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 7px 12px;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+
+    .file-upload-btn:hover { background: var(--bg-hover); }
+
+    .modal-avatar-hint {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+    }
+
+    .modal-json-label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .modal-json-textarea {
+        width: 100%;
+        min-height: 280px;
+        resize: vertical;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 12px;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: var(--text-primary);
+        background: var(--bg-sidebar);
+        outline: none;
+    }
+
+    .modal-json-textarea:focus { border-color: var(--text-muted); }
+
+    .modal-error {
+        font-size: 0.82rem;
+        color: #b97a7a;
+        min-height: 1em;
+        white-space: pre-wrap;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 16px 20px;
+        border-top: 1px solid var(--border-color);
+        flex-shrink: 0;
+    }
+
+    .modal-btn {
+        border: none;
+        font-family: var(--font-ui);
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 9px 16px;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+        transition: background 0.15s ease, opacity 0.15s ease;
+    }
+
+    .modal-btn-secondary {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    .modal-btn-secondary:hover { background: var(--bg-active); }
+
+    .modal-btn-primary {
+        background: var(--text-primary);
+        color: var(--bg-page);
+    }
+
+    .modal-btn-primary:hover { opacity: 0.88; }
+
+    .modal-btn-primary:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .character-name {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+        pointer-events: auto;
+    }
+
+    .character-desc {
+        font-size: 0.78rem;
+        line-height: 1.35;
+        color: rgba(255,255,255,0.8);
+        text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        pointer-events: auto;
+    }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        padding: 60px 0;
+    }
+
+    .loading-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        padding: 60px 0;
+    }
+
+    /* ===================== AI CHARACTER WRITER MODAL ===================== */
+    .writer-textarea {
+        width: 100%;
+        min-height: 130px;
+        resize: vertical;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 12px;
+        font-family: var(--font-ui);
+        font-size: 0.88rem;
+        line-height: 1.5;
+        color: var(--text-primary);
+        background: var(--bg-sidebar);
+        outline: none;
+    }
+
+    .writer-textarea:focus { border-color: var(--text-muted); }
+
+    .writer-hint {
+        display: block;
+        margin-top: 4px;
+        font-size: 0.78rem;
+        font-weight: 400;
+        color: var(--text-muted);
+    }
+
+    .writer-counter {
+        text-align: right;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+
+    .writer-counter.near-limit { color: #b97a7a; }
+
+    .writer-status {
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        min-height: 1.2em;
+    }
+
+    .writer-status.error { color: #b97a7a; }
+
+    .writer-spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,0.4);
+        border-top-color: #fff;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+        animation: writer-spin 0.7s linear infinite;
+        vertical-align: -2px;
+    }
+
+    .writer-spinner.hidden { display: none; }
+
+    @keyframes writer-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ===================== SETTINGS MODAL ===================== */
+    .settings-grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        row-gap: 10px;
+        column-gap: 16px;
+        font-size: 0.85rem;
+    }
+
+    .settings-label {
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .settings-value {
+        color: var(--text-primary);
+        font-weight: 600;
+        text-align: right;
+    }
+
+    .settings-thoughts-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 14px;
+        margin-top: 4px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .settings-thoughts-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .thoughts-toggle-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .toggle-track {
+        width: 34px;
+        height: 20px;
+        border-radius: 999px;
+        background: var(--bg-active);
+        position: relative;
+        transition: background 0.15s ease;
+    }
+
+    .toggle-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        transition: transform 0.15s ease;
+    }
+
+    .thoughts-toggle-btn.toggle-on .toggle-track { background: var(--text-primary); }
+    .thoughts-toggle-btn.toggle-on .toggle-thumb { transform: translateX(14px); }
+
+    .toggle-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        min-width: 22px;
+    }
+
+    /* ===================== CHATS VIEW ===================== */
+    .chats-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        max-width: 720px;
+        margin: 0 auto 14px;
+    }
+
+    .chats-edit-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        font-family: var(--font-ui);
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 7px 14px;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+
+    .chats-edit-toggle:hover { background: var(--bg-hover); }
+
+    .chats-edit-toggle.active {
+        background: var(--bg-active);
+    }
+
+    .chats-list {
+        display: flex;
+        flex-direction: column;
+        max-width: 720px;
+        margin: 0 auto;
+        gap: 4px;
+    }
+
+    .chat-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 12px;
+        border-radius: var(--radius-card);
+        cursor: pointer;
+        transition: background 0.12s ease;
+    }
+
+    .chat-row:hover { background: var(--bg-hover); }
+
+    .chat-row-select {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 2px solid var(--border-color);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 0.12s ease, background 0.12s ease;
+    }
+
+    .chats-list.edit-mode .chat-row-select { display: flex; }
+
+    .chat-row-select.checked {
+        border-color: var(--text-primary);
+        background: var(--text-primary);
+    }
+
+    .chat-row-select.checked::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--bg-page);
+    }
+
+    .chat-row-avatar {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 0.85rem;
+        font-weight: 600;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .chat-row-avatar img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+    }
+
+    .chat-row-body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .chat-row-top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .chat-row-name {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .chat-row-date {
+        flex-shrink: 0;
+        font-size: 0.76rem;
+        color: var(--text-muted);
+    }
+
+    .chat-row-preview {
+        margin-top: 2px;
+        font-size: 0.83rem;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .chat-row-preview.placeholder {
+        font-style: italic;
+        color: var(--text-muted);
+    }
+
+    /* FLOATING BULK-SELECT BAR */
+    .chats-editbar {
+        position: fixed;
+        left: 50%;
+        bottom: 26px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: #1C1C1F;
+        color: #fff;
+        padding: 10px 10px 10px 18px;
+        border-radius: 999px;
+        box-shadow: var(--shadow-card-hover);
+        z-index: 50;
+    }
+
+    .chats-editbar-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .chats-editbar-divider {
+        width: 1px;
+        height: 20px;
+        background: rgba(255,255,255,0.18);
+    }
+
+    .chats-editbar-delete {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border: none;
+        background: none;
+        color: rgba(255,255,255,0.35);
+        font-family: var(--font-ui);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: default;
+        padding: 6px 4px;
+    }
+
+    .chats-editbar-delete:not(:disabled) {
+        color: #FF6B5E;
+        cursor: pointer;
+    }
+
+    .chats-editbar-done {
+        border: none;
+        background: #fff;
+        color: #111;
+        font-family: var(--font-ui);
+        font-size: 0.85rem;
+        font-weight: 700;
+        padding: 8px 18px;
+        border-radius: 999px;
+        cursor: pointer;
+    }
+
+    .chats-empty-state {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        padding: 60px 0;
+    }
+
+    /* ===================== RESPONSIVE ===================== */
+    @media (max-width: 720px) {
+        .sidebar { display: none; }
+        .main { padding: 20px; }
+        .mobile-chats-btn { display: inline-flex; }
+    }
+
+    /* Guarantee at least two character cards per row on typical PC/laptop
+       widths — the flexible auto-fill grid below only kicks in once
+       there's room for 3+. */
+    @media (min-width: 721px) {
+        .character-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (min-width: 980px) {
+        .character-grid {
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+    <!-- Mobile-only floating pill — replaces the sidebar's "Chats" nav
+         item once the sidebar itself is hidden below 720px. -->
+    <button id="mobile-chats-btn" class="mobile-chats-btn" type="button" aria-label="Chats">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-4.8 7.6 8.5 8.5 0 0 1-9.4-1.8L3 21l1.9-4.8a8.38 8.38 0 0 1-1.4-4.7 8.5 8.5 0 0 1 8.5-8.5h.3a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span>Chats</span>
+    </button>
+
+    <aside class="sidebar">
+        <div class="brand">MultiChat AI</div>
+        <nav class="nav-list">
+            <button class="nav-item active" data-view="characters">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                <span>Characters</span>
+            </button>
+            <button class="nav-item" data-view="create">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                <span>Create Character</span>
+            </button>
+            <button class="nav-item" id="nav-edit-character" data-view="edit-character">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 2 4 4-13 13H5v-4L18 2Z"/><path d="M14.5 5.5 18.5 9.5"/></svg>
+                <span id="nav-edit-character-label">Edit Character</span>
+            </button>
+            <button class="nav-item" data-view="chats">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-4.8 7.6 8.5 8.5 0 0 1-9.4-1.8L3 21l1.9-4.8a8.38 8.38 0 0 1-1.4-4.7 8.5 8.5 0 0 1 8.5-8.5h.3a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <span>Chats</span>
+            </button>
+            <button class="nav-item" data-view="settings">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Settings</span>
+            </button>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="user-profile-btn">
+                <span class="avatar-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+                </span>
+                <span>User Profile</span>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div id="view-characters">
+            <div class="search-bar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="character-search" placeholder="Search for characters..." autocomplete="off">
+            </div>
+
+            <div class="character-grid" id="character-grid"></div>
+        </div>
+
+        <div id="view-chats" class="hidden">
+            <div class="search-bar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="chats-search" placeholder="Search Chats..." autocomplete="off">
+            </div>
+
+            <div class="chats-toolbar">
+                <button id="chats-edit-toggle" class="chats-edit-toggle" type="button">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    <span id="chats-edit-toggle-label">Edit</span>
+                </button>
+            </div>
+
+            <div class="chats-list" id="chats-list"></div>
+        </div>
+    </main>
+</div>
+
+<!-- Floating bulk-select bar — shown only while the Chats view is in edit mode -->
+<div id="chats-editbar" class="chats-editbar hidden">
+    <span class="chats-editbar-label">Select chats</span>
+    <span class="chats-editbar-divider"></span>
+    <button id="chats-delete-btn" class="chats-editbar-delete" type="button" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        <span>Delete</span>
+    </button>
+    <span class="chats-editbar-divider"></span>
+    <button id="chats-editbar-done" class="chats-editbar-done" type="button">Done</button>
+</div>
+
+<!-- ===================== EDIT CHARACTER MODAL ===================== -->
+<div class="modal-overlay" id="edit-modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3 id="edit-modal-title">Edit Character</h3>
+            <button class="modal-close-btn" id="edit-modal-close-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-avatar-row">
+                <div class="modal-avatar-preview-wrap" id="edit-modal-avatar-wrap">
+                    <span id="edit-modal-avatar-initials"></span>
+                    <img id="edit-modal-avatar-img" alt="">
+                </div>
+                <div class="modal-avatar-controls">
+                    <label class="file-upload-btn" for="edit-modal-image-input">Choose Image</label>
+                    <input type="file" id="edit-modal-image-input" accept="image/png, image/jpeg, image/webp, image/gif" hidden>
+                    <span class="modal-avatar-hint" id="edit-modal-image-filename">No new image selected</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="modal-json-label" for="edit-modal-json">Character JSON</label>
+                <textarea id="edit-modal-json" class="modal-json-textarea" spellcheck="false"></textarea>
+            </div>
+
+            <div class="modal-error" id="edit-modal-error"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-secondary" id="edit-modal-cancel-btn">Cancel</button>
+            <button class="modal-btn modal-btn-primary" id="edit-modal-save-btn">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== AI CHARACTER WRITER MODAL ===================== -->
+<div class="modal-overlay" id="writer-modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>✨ AI Character Writer</h3>
+            <button class="modal-close-btn" id="writer-modal-close-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div>
+                <label class="modal-json-label" for="writer-input">
+                    What kind of character do you want to create?
+                    <span class="writer-hint">e.g. "A grumpy, overly-protective bodyguard" — or paste a full detailed brief: backstory, personality quirks, how they talk, anything you want the AI to know.</span>
+                </label>
+                <textarea id="writer-input" class="writer-textarea" maxlength="4000" rows="6" placeholder="A grumpy, overly-protective bodyguard... (write as much detail as you want)"></textarea>
+                <div id="writer-counter" class="writer-counter">0 / 4000</div>
+            </div>
+            <div id="writer-status" class="writer-status" aria-live="polite"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-secondary" id="writer-cancel-btn">Cancel</button>
+            <button class="modal-btn modal-btn-primary" id="writer-generate-btn">
+                <span id="writer-spinner" class="writer-spinner hidden"></span>
+                <span id="writer-generate-label">Generate Character</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== SETTINGS MODAL ===================== -->
+<div class="modal-overlay" id="settings-modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Session Info &amp; Parameters</h3>
+            <button class="modal-close-btn" id="settings-modal-close-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="settings-grid">
+                <span class="settings-label">Active Model</span>
+                <span class="settings-value" id="s-model">—</span>
+
+                <span class="settings-label">Connection</span>
+                <span class="settings-value" id="s-connection">—</span>
+
+                <span class="settings-label">Story Mode</span>
+                <span class="settings-value" id="s-mode">—</span>
+
+                <span class="settings-label">Relationship Mode</span>
+                <span class="settings-value" id="s-relmode">—</span>
+
+                <span class="settings-label">Temperature</span>
+                <span class="settings-value" id="s-temp">—</span>
+
+                <span class="settings-label">Top P</span>
+                <span class="settings-value" id="s-topp">—</span>
+
+                <span class="settings-label">Max Tokens</span>
+                <span class="settings-value" id="s-maxtok">—</span>
+
+                <span class="settings-label">Rep. Penalty</span>
+                <span class="settings-value" id="s-rep">—</span>
+
+                <span class="settings-label">Est. Tokens Used</span>
+                <span class="settings-value" id="s-tokens">—</span>
+            </div>
+
+            <div class="settings-thoughts-row">
+                <span class="settings-thoughts-label">Show AI Internal Thoughts</span>
+                <button id="thoughts-toggle" class="thoughts-toggle-btn" aria-pressed="false" title="Toggle AI thought visibility">
+                    <span class="toggle-track">
+                        <span class="toggle-thumb"></span>
+                    </span>
+                    <span class="toggle-label" id="thoughts-label">Off</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Same lightweight session gate as the chat page — if you haven't
+    // logged in yet this session, bounce back to the login screen.
+    if (sessionStorage.getItem('mc_authenticated') !== '1') {
+        window.location.href = 'index.html';
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // CHARACTER DATA
+    // Loaded live from the Flask backend via /characters_full, which
+    // returns {name, id, description} — description is whatever was
+    // last saved in the chat page's character panel (or backstory /
+    // appearance as a fallback, same priority order used there).
+    // ══════════════════════════════════════════════════════════════════
+    let ALL_CHARACTERS = [];
+
+    // Grayscale gradient set — cycled per card so the grid reads a bit
+    // less uniform, same spirit as the monochrome portraits in the mock.
+    const AVATAR_GRADIENTS = [
+        "linear-gradient(135deg, #3a3a3f, #6d6d75)",
+        "linear-gradient(135deg, #52525a, #8a8a92)",
+        "linear-gradient(135deg, #2b2b30, #58585f)",
+        "linear-gradient(135deg, #45454c, #78787f)",
+    ];
+
+    function initials(name) {
+        return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
+    // list items are {name, id} — id is used to look up the avatar image
+    // and to load/save the raw character JSON in the edit modal.
+    function renderCharacters(list) {
+        const grid = document.getElementById("character-grid");
+        grid.innerHTML = "";
+
+        if (list.length === 0) {
+            grid.innerHTML = `<div class="empty-state">No characters match your search.</div>`;
+            return;
+        }
+
+        list.forEach((char, i) => {
+            const { name, id, description, backstory, appearance } = char;
+            const desc = description || backstory || appearance || "";
+            const card = document.createElement("div");
+            card.className = "character-card";
+            card.innerHTML = `
+                <div class="character-avatar" style="background:${AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length]}">
+                    <span class="character-avatar-initials">${initials(name)}</span>
+                    <img class="character-avatar-img" alt="" style="display:none">
+                </div>
+                <div class="character-overlay">
+                    <div class="character-name">${escapeHtml(name)}</div>
+                    ${desc ? `<div class="character-desc">${escapeHtml(desc)}</div>` : ""}
+                </div>
+                <button class="edit-char-btn" type="button" title="Edit ${escapeHtml(name)}" aria-label="Edit ${escapeHtml(name)}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+            `;
+
+            // Try to load a real avatar; silently fall back to the
+            // gradient + initials placeholder if none was ever uploaded.
+            const img = card.querySelector(".character-avatar-img");
+            const initialsSpan = card.querySelector(".character-avatar-initials");
+            img.onload = () => { img.style.display = "block"; initialsSpan.style.display = "none"; };
+            img.onerror = () => { img.style.display = "none"; initialsSpan.style.display = "block"; };
+            img.src = `/character_image/${encodeURIComponent(id)}`;
+
+            card.addEventListener("click", () => openCharacter(name));
+            card.querySelector(".edit-char-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                openEditModal(name);
+            });
+            grid.appendChild(card);
+        });
+    }
+
+    function openCharacter(name) {
+        // Send the character over as a URL param and land on the chat page.
+        // script.js reads ?character= on load, selects it, and starts a
+        // new chat (see the "Arrived from the home page" hook in init()).
+        window.location.href = `index.html?character=${encodeURIComponent(name)}`;
+    }
+
+    function loadCharacters() {
+        const grid = document.getElementById("character-grid");
+        grid.innerHTML = `<div class="loading-state">Loading characters…</div>`;
+
+        fetch('/characters_full')
+            .then(r => r.json())
+            .then(list => {
+                ALL_CHARACTERS = list;
+                renderCharacters(ALL_CHARACTERS);
+            })
+            .catch(() => {
+                grid.innerHTML = `<div class="empty-state">Could not reach the server — is server.py running?</div>`;
+            });
+    }
+
+    document.getElementById("character-search").addEventListener("input", (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        renderCharacters(ALL_CHARACTERS.filter(c => c.name.toLowerCase().includes(q)));
+    });
+
+    loadCharacters();
+
+    // ══════════════════════════════════════════════════════════════
+    // EDIT CHARACTER MODAL
+    // Pencil button on a card -> loads /character/<name> -> shows the
+    // raw JSON in a textarea + an image picker -> Save posts both to
+    // /edit_character (multipart form: char_id, data, image?).
+    // ══════════════════════════════════════════════════════════════
+    let editCharId    = null;
+    let editCharName  = null;
+    let editImageFile = null;
+
+    const editOverlay   = document.getElementById("edit-modal-overlay");
+    const editTitle      = document.getElementById("edit-modal-title");
+    const editTextarea    = document.getElementById("edit-modal-json");
+    const editError        = document.getElementById("edit-modal-error");
+    const editSaveBtn       = document.getElementById("edit-modal-save-btn");
+    const editImageInput      = document.getElementById("edit-modal-image-input");
+    const editImageFilename    = document.getElementById("edit-modal-image-filename");
+    const editAvatarImg          = document.getElementById("edit-modal-avatar-img");
+    const editAvatarInitials      = document.getElementById("edit-modal-avatar-initials");
+
+    // Reads the response as text first, so a non-JSON reply (e.g. an
+    // HTML error page) shows a readable message instead of throwing an
+    // opaque "Unexpected token '<'" parse error.
+    function parseJsonResponse(response) {
+        return response.text().then(text => {
+            let body = {};
+            if (text) {
+                try {
+                    body = JSON.parse(text);
+                } catch (e) {
+                    console.error(`Non-JSON response (status ${response.status}) from ${response.url}:`, text);
+                    throw new Error(`Server returned an unexpected response (status ${response.status}). Check the terminal running server.py for the error.`);
+                }
+            }
+            return { ok: response.ok, status: response.status, body };
+        });
+    }
+
+    function openEditModal(name) {
+        editCharId    = null;
+        editCharName  = name;
+        editImageFile = null;
+
+        editTitle.textContent = `Edit "${name}"`;
+        editError.textContent = "";
+        editTextarea.value    = "Loading…";
+        editImageInput.value  = "";
+        editImageFilename.textContent = "No new image selected";
+        editAvatarInitials.textContent = initials(name);
+        editAvatarImg.style.display = "none";
+        editAvatarInitials.style.display = "flex";
+
+        editOverlay.classList.add("open");
+
+        fetch(`/character/${encodeURIComponent(name)}`)
+            .then(parseJsonResponse)
+            .then(({ ok, body }) => {
+                if (!ok) throw new Error(body.error || "Character not found.");
+                editCharId = body.id;
+                editTextarea.value = JSON.stringify(body.data, null, 2);
+
+                // Show the existing avatar if one exists for this character.
+                editAvatarImg.onload  = () => { editAvatarImg.style.display = "block"; editAvatarInitials.style.display = "none"; };
+                editAvatarImg.onerror = () => { editAvatarImg.style.display = "none"; editAvatarInitials.style.display = "flex"; };
+                editAvatarImg.src = `/character_image/${encodeURIComponent(body.id)}?t=${Date.now()}`;
+            })
+            .catch(err => {
+                editTextarea.value = "";
+                editError.textContent = err.message || "Failed to load character.";
+            });
+    }
+
+    function closeEditModal() {
+        editOverlay.classList.remove("open");
+        editCharId = null;
+        editCharName = null;
+        editImageFile = null;
+    }
+
+    document.getElementById("edit-modal-close-btn").addEventListener("click", closeEditModal);
+    document.getElementById("edit-modal-cancel-btn").addEventListener("click", closeEditModal);
+    editOverlay.addEventListener("click", (e) => {
+        if (e.target === editOverlay) closeEditModal();
+    });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && editOverlay.classList.contains("open")) closeEditModal();
+    });
+
+    editImageInput.addEventListener("change", (e) => {
+        const file = e.target.files[0] || null;
+        editImageFile = file;
+        editImageFilename.textContent = file ? file.name : "No new image selected";
+        if (file) {
+            editAvatarImg.onload = () => { editAvatarImg.style.display = "block"; editAvatarInitials.style.display = "none"; };
+            editAvatarImg.src = URL.createObjectURL(file);
+        }
+    });
+
+    editSaveBtn.addEventListener("click", () => {
+        editError.textContent = "";
+
+        if (!editCharId) {
+            editError.textContent = "Character hasn't finished loading yet — try again in a moment.";
+            return;
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(editTextarea.value);
+        } catch (err) {
+            editError.textContent = `Invalid JSON: ${err.message}`;
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("char_id", editCharId);
+        formData.append("data", JSON.stringify(parsed));
+        if (editImageFile) {
+            formData.append("image", editImageFile);
+        }
+
+        editSaveBtn.disabled = true;
+        editSaveBtn.textContent = "Saving…";
+
+        fetch('/edit_character', { method: 'POST', body: formData })
+            .then(parseJsonResponse)
+            .then(({ ok, body }) => {
+                if (!ok || body.status !== "success") {
+                    throw new Error(body.message || "Failed to save character.");
+                }
+                closeEditModal();
+                loadCharacters(); // refresh the grid so the card reflects any changes
+            })
+            .catch(err => {
+                editError.textContent = err.message;
+            })
+            .finally(() => {
+                editSaveBtn.disabled = false;
+                editSaveBtn.textContent = "Save Changes";
+            });
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // NAV BUTTONS — Characters / Create Character / Chats / Settings
+    // "Characters" and "Chats" are true switchable views; "Create" and
+    // "Settings" stay as modal-only actions (they don't change the view
+    // or the active nav highlight).
+    // ══════════════════════════════════════════════════════════════
+    const navCharacters = document.querySelector('.nav-item[data-view="characters"]');
+    const navChats       = document.querySelector('.nav-item[data-view="chats"]');
+    const viewCharacters = document.getElementById('view-characters');
+    const viewChats       = document.getElementById('view-chats');
+
+    function showCharactersView() {
+        navChats.classList.remove('active');
+        navCharacters.classList.add('active');
+        viewChats.classList.add('hidden');
+        viewCharacters.classList.remove('hidden');
+        exitChatsEditMode();
+    }
+
+    function showChatsView() {
+        navCharacters.classList.remove('active');
+        navChats.classList.add('active');
+        viewCharacters.classList.add('hidden');
+        viewChats.classList.remove('hidden');
+        loadChatsList();
+    }
+
+    navCharacters.addEventListener('click', showCharactersView);
+    navChats.addEventListener('click', showChatsView);
+    document.querySelector('.nav-item[data-view="create"]').addEventListener('click', openWriterModal);
+    document.querySelector('.nav-item[data-view="settings"]').addEventListener('click', openSettingsModal);
+
+    // Mobile-only floating pill (sidebar, and its own "Chats" nav item,
+    // are hidden below 720px — see the @media block in <style>).
+    const mobileChatsBtn = document.getElementById('mobile-chats-btn');
+    if (mobileChatsBtn) mobileChatsBtn.addEventListener('click', showChatsView);
+
+    // ══════════════════════════════════════════════════════════════
+    // EDIT CHARACTER TOGGLE — the per-card pencil buttons are hidden by
+    // default (see .edit-char-btn CSS) and only revealed while this is on.
+    // ══════════════════════════════════════════════════════════════
+    const navEditCharacter      = document.getElementById('nav-edit-character');
+    const navEditCharacterLabel = document.getElementById('nav-edit-character-label');
+    const characterGridEl       = document.getElementById('character-grid');
+    let characterEditMode        = false;
+
+    function setCharacterEditMode(on) {
+        characterEditMode = on;
+        characterGridEl.classList.toggle('edit-mode', on);
+        navEditCharacter.classList.toggle('active', on);
+        navEditCharacterLabel.textContent = on ? 'Done Editing' : 'Edit Character';
+    }
+
+    navEditCharacter.addEventListener('click', () => setCharacterEditMode(!characterEditMode));
+
+    // Arrived from the chat page's shared sidebar nav — land on the
+    // requested view/modal instead of always defaulting to Characters.
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    if (requestedView === 'create') {
+        openWriterModal();
+    } else if (requestedView === 'settings') {
+        openSettingsModal();
+    } else if (requestedView === 'edit-character') {
+        showCharactersView();
+        setCharacterEditMode(true);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // CHATS VIEW — universal, most-recent-first list across every
+    // character (same /chat_history_all endpoint the chat page's own
+    // sidebar uses), with search and bulk-select delete.
+    // ══════════════════════════════════════════════════════════════
+    let ALL_CHATS       = [];
+    let chatsEditMode    = false;
+    const selectedChats  = new Map(); // path -> {path, character, chat_id}
+
+    const chatsListEl        = document.getElementById('chats-list');
+    const chatsSearchInput   = document.getElementById('chats-search');
+    const chatsEditToggle    = document.getElementById('chats-edit-toggle');
+    const chatsEditToggleLbl = document.getElementById('chats-edit-toggle-label');
+    const chatsEditbar       = document.getElementById('chats-editbar');
+    const chatsDeleteBtn     = document.getElementById('chats-delete-btn');
+    const chatsEditbarDone   = document.getElementById('chats-editbar-done');
+
+    function formatChatDate(unixSeconds) {
+        if (!unixSeconds) return '';
+        const d = new Date(unixSeconds * 1000);
+        return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    }
+
+    function loadChatsList() {
+        chatsListEl.innerHTML = `<div class="chats-empty-state">Loading chats…</div>`;
+        fetch('/chat_history_all')
+            .then(r => r.json())
+            .then(chats => {
+                ALL_CHATS = Array.isArray(chats) ? chats : [];
+                renderChatsList(ALL_CHATS);
+            })
+            .catch(() => {
+                chatsListEl.innerHTML = `<div class="chats-empty-state">Could not reach the server — is server.py running?</div>`;
+            });
+    }
+
+    function renderChatsList(list) {
+        chatsListEl.innerHTML = '';
+
+        if (list.length === 0) {
+            chatsListEl.innerHTML = `<div class="chats-empty-state">No chats yet — start one from a character's page.</div>`;
+            return;
+        }
+
+        list.forEach((chat, i) => {
+            const row = document.createElement('div');
+            row.className = 'chat-row';
+
+            const preview = (chat.preview || '').replace(/\s+/g, ' ').trim() || 'No messages yet';
+            const isPlaceholder = !!chat.preview_is_placeholder;
+
+            row.innerHTML = `
+                <div class="chat-row-select" data-path="${escapeHtml(chat.path)}"></div>
+                <div class="chat-row-avatar" style="background:${AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length]}">
+                    <span class="chat-row-avatar-initials">${initials(chat.character || '?')}</span>
+                    <img alt="" style="display:none">
+                </div>
+                <div class="chat-row-body">
+                    <div class="chat-row-top">
+                        <span class="chat-row-name">${escapeHtml(chat.character || 'Unknown')}</span>
+                        <span class="chat-row-date">${formatChatDate(chat.last_activity)}</span>
+                    </div>
+                    <div class="chat-row-preview${isPlaceholder ? ' placeholder' : ''}">${escapeHtml(preview)}</div>
+                </div>
+            `;
+
+            const img = row.querySelector('.chat-row-avatar img');
+            const initialsSpan = row.querySelector('.chat-row-avatar-initials');
+            img.onload  = () => { img.style.display = 'block'; initialsSpan.style.display = 'none'; };
+            img.onerror = () => { img.style.display = 'none'; initialsSpan.style.display = 'block'; };
+            if (chat.char_id) img.src = `/character_image/${encodeURIComponent(chat.char_id)}`;
+
+            const selectCircle = row.querySelector('.chat-row-select');
+            if (selectedChats.has(chat.path)) selectCircle.classList.add('checked');
+
+            row.addEventListener('click', () => {
+                if (chatsEditMode) {
+                    toggleChatSelection(chat, selectCircle);
+                } else {
+                    const url = `index.html?character=${encodeURIComponent(chat.character)}&chat=${encodeURIComponent(chat.path)}`;
+                    window.location.href = url;
+                }
+            });
+
+            chatsListEl.appendChild(row);
+        });
+    }
+
+    chatsSearchInput.addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        const filtered = ALL_CHATS.filter(c =>
+            (c.character || '').toLowerCase().includes(q) ||
+            (c.preview || '').toLowerCase().includes(q)
+        );
+        renderChatsList(filtered);
+    });
+
+    function toggleChatSelection(chat, circleEl) {
+        if (selectedChats.has(chat.path)) {
+            selectedChats.delete(chat.path);
+            circleEl.classList.remove('checked');
+        } else {
+            selectedChats.set(chat.path, chat);
+            circleEl.classList.add('checked');
+        }
+        chatsDeleteBtn.disabled = selectedChats.size === 0;
+    }
+
+    function enterChatsEditMode() {
+        chatsEditMode = true;
+        selectedChats.clear();
+        chatsListEl.classList.add('edit-mode');
+        chatsEditToggle.classList.add('active');
+        chatsEditToggleLbl.textContent = 'Done';
+        chatsEditbar.classList.remove('hidden');
+        chatsDeleteBtn.disabled = true;
+        renderChatsList(ALL_CHATS.filter(c => matchesChatsSearch(c)));
+    }
+
+    function exitChatsEditMode() {
+        chatsEditMode = false;
+        selectedChats.clear();
+        chatsListEl.classList.remove('edit-mode');
+        chatsEditToggle.classList.remove('active');
+        chatsEditToggleLbl.textContent = 'Edit';
+        chatsEditbar.classList.add('hidden');
+    }
+
+    function matchesChatsSearch(chat) {
+        const q = chatsSearchInput.value.trim().toLowerCase();
+        if (!q) return true;
+        return (chat.character || '').toLowerCase().includes(q) || (chat.preview || '').toLowerCase().includes(q);
+    }
+
+    chatsEditToggle.addEventListener('click', () => {
+        if (chatsEditMode) exitChatsEditMode(); else enterChatsEditMode();
+    });
+    chatsEditbarDone.addEventListener('click', exitChatsEditMode);
+
+    chatsDeleteBtn.addEventListener('click', () => {
+        if (selectedChats.size === 0) return;
+        const count = selectedChats.size;
+        if (!confirm(`Delete ${count} chat${count > 1 ? 's' : ''}? This can't be undone.`)) return;
+
+        const toDelete = Array.from(selectedChats.values());
+        Promise.all(toDelete.map(chat =>
+            fetch('/delete_chat', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ path: chat.path, character: chat.character, chat_id: chat.chat_id })
+            }).catch(() => null)
+        )).then(() => {
+            exitChatsEditMode();
+            loadChatsList();
+        });
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // AI CHARACTER WRITER
+    // Same /create_character endpoint the chat page's ✨ button used.
+    // On success, the new character's card will show up in the grid,
+    // and we hand off straight to the chat page — index.html reads
+    // ?character= on load and starts the conversation automatically.
+    // ══════════════════════════════════════════════════════════════
+    const WRITER_STATUS_MESSAGES = [
+        'Drafting character backstory...',
+        'Shaping their personality...',
+        'Writing their opening line...',
+        'Polishing the roleplay rules...'
+    ];
+    const WRITER_MAX_LEN = 4000;
+    let writerStatusInterval = null;
+
+    const writerOverlay      = document.getElementById('writer-modal-overlay');
+    const writerInput        = document.getElementById('writer-input');
+    const writerCounter      = document.getElementById('writer-counter');
+    const writerStatus       = document.getElementById('writer-status');
+    const writerGenerateBtn  = document.getElementById('writer-generate-btn');
+    const writerGenerateLabel= document.getElementById('writer-generate-label');
+    const writerSpinner      = document.getElementById('writer-spinner');
+    const writerCancelBtn    = document.getElementById('writer-cancel-btn');
+    const writerCloseBtn     = document.getElementById('writer-modal-close-btn');
+
+    function updateWriterCounter() {
+        const len = writerInput.value.length;
+        writerCounter.textContent = `${len} / ${WRITER_MAX_LEN}`;
+        writerCounter.classList.toggle('near-limit', len > WRITER_MAX_LEN * 0.9);
+    }
+
+    function setWriterBusy(busy) {
+        writerGenerateBtn.disabled = busy;
+        writerCancelBtn.disabled   = busy;
+        writerInput.disabled       = busy;
+        writerSpinner.classList.toggle('hidden', !busy);
+        writerGenerateLabel.textContent = busy ? 'Generating…' : 'Generate Character';
+    }
+
+    function openWriterModal() {
+        writerOverlay.classList.add('open');
+        writerInput.value = '';
+        writerStatus.textContent = '';
+        writerStatus.classList.remove('error');
+        updateWriterCounter();
+        setWriterBusy(false);
+        writerInput.focus();
+    }
+
+    function closeWriterModal() {
+        if (writerStatusInterval) {
+            clearInterval(writerStatusInterval);
+            writerStatusInterval = null;
+        }
+        writerOverlay.classList.remove('open');
+        setWriterBusy(false);
+    }
+
+    writerCloseBtn.addEventListener('click', closeWriterModal);
+    writerCancelBtn.addEventListener('click', closeWriterModal);
+    writerOverlay.addEventListener('click', (e) => {
+        if (e.target === writerOverlay) closeWriterModal();
+    });
+    writerInput.addEventListener('input', updateWriterCounter);
+
+    writerGenerateBtn.addEventListener('click', () => {
+        const vibe = writerInput.value.trim();
+        if (!vibe) {
+            writerStatus.textContent = 'Please describe a character idea first.';
+            writerStatus.classList.add('error');
+            return;
+        }
+
+        setWriterBusy(true);
+        writerStatus.classList.remove('error');
+
+        let msgIndex = 0;
+        writerStatus.textContent = WRITER_STATUS_MESSAGES[0];
+        writerStatusInterval = setInterval(() => {
+            msgIndex = (msgIndex + 1) % WRITER_STATUS_MESSAGES.length;
+            writerStatus.textContent = WRITER_STATUS_MESSAGES[msgIndex];
+        }, 2200);
+
+        fetch('/create_character', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ vibe })
+        })
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                if (writerStatusInterval) {
+                    clearInterval(writerStatusInterval);
+                    writerStatusInterval = null;
+                }
+
+                if (!ok || data.status !== 'ok') {
+                    writerStatus.textContent = '⚠️ ' + (data.error || 'Character generation failed.');
+                    writerStatus.classList.add('error');
+                    setWriterBusy(false);
+                    return;
+                }
+
+                writerStatus.textContent = `✨ Created "${data.character}" — opening chat…`;
+                loadCharacters(); // refresh grid in the background
+                setTimeout(() => {
+                    window.location.href = `index.html?character=${encodeURIComponent(data.character)}`;
+                }, 600);
+            })
+            .catch(err => {
+                if (writerStatusInterval) {
+                    clearInterval(writerStatusInterval);
+                    writerStatusInterval = null;
+                }
+                writerStatus.textContent = '⚠️ Connection error: ' + err.message;
+                writerStatus.classList.add('error');
+                setWriterBusy(false);
+            });
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && writerOverlay.classList.contains('open')) closeWriterModal();
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // SETTINGS MODAL
+    // Same /settings + /toggle_thoughts endpoints the chat page uses.
+    // The home page has no single "active" character/model the way an
+    // open chat does, so this shows the currently configured defaults
+    // (first model in the list) rather than per-chat session values —
+    // open a chat for session-specific numbers like token usage.
+    // ══════════════════════════════════════════════════════════════
+    const settingsOverlay  = document.getElementById('settings-modal-overlay');
+    const settingsCloseBtn = document.getElementById('settings-modal-close-btn');
+    const thoughtsToggle   = document.getElementById('thoughts-toggle');
+    const thoughtsLabel    = document.getElementById('thoughts-label');
+
+    function setThoughtsUI(enabled) {
+        thoughtsToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        thoughtsToggle.classList.toggle('toggle-on', enabled);
+        thoughtsLabel.textContent = enabled ? 'On' : 'Off';
+    }
+
+    function openSettingsModal() {
+        fetch('/models')
+            .then(r => r.json())
+            .then(models => {
+                const defaultModel = Array.isArray(models) && models.length > 0 ? models[0] : '';
+                return fetch('/settings', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ character: '', model: defaultModel })
+                });
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('s-model').textContent      = data.active_model     || '—';
+                document.getElementById('s-connection').textContent = data.connection        || '—';
+                document.getElementById('s-mode').textContent       = data.story_mode        || '—';
+                document.getElementById('s-relmode').textContent    = data.relationship_mode || '—';
+                document.getElementById('s-temp').textContent       = data.temperature       ?? '—';
+                document.getElementById('s-topp').textContent       = data.top_p             ?? '—';
+                document.getElementById('s-maxtok').textContent     = data.max_tokens        ?? '—';
+                document.getElementById('s-rep').textContent        = data.rep_penalty       ?? '—';
+                document.getElementById('s-tokens').textContent     = data.estimated_tokens  ?? '—';
+                setThoughtsUI(data.show_thoughts === true);
+                settingsOverlay.classList.add('open');
+            })
+            .catch(() => {
+                alert('Could not load settings — is server.py running?');
+            });
+    }
+
+    function closeSettingsModal() {
+        settingsOverlay.classList.remove('open');
+    }
+
+    settingsCloseBtn.addEventListener('click', closeSettingsModal);
+    settingsOverlay.addEventListener('click', (e) => {
+        if (e.target === settingsOverlay) closeSettingsModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && settingsOverlay.classList.contains('open')) closeSettingsModal();
+    });
+
+    thoughtsToggle.addEventListener('click', () => {
+        const current = thoughtsToggle.getAttribute('aria-pressed') === 'true';
+        const next    = !current;
+        fetch('/toggle_thoughts', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ enable: next })
+        })
+            .then(r => r.json())
+            .then(data => setThoughtsUI(data.show_thoughts))
+            .catch(() => alert('Could not toggle thoughts.'));
+    });
+</script>
+</body>
+</html>

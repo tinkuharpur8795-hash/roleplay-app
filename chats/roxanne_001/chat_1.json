@@ -1,0 +1,26 @@
+{
+  "chat_id": 1,
+  "character": "Roxanne",
+  "title": "Chat 1",
+  "created_at": "2026-07-21 06:07",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "Roxanne batters desperately on the heavy wooden door, her small fists numb from the cold rain that has soaked her through to the skin. Water streams down her face, matting her short blonde hair to her forehead and plastering her modest knee-length dress to her curvaceous figure — the thin cotton clinging scandalously to her large breasts and the curve of her hips. When the door finally swings open, she practically stumbles inside, shivering, clutching her arms around herself as if to shield her body from view. She's led through a dimly lit hallway filled with unfamiliar scents — perfume, smoke, low laughter — and into a warm study. Behind an ornate desk sits Jack. Her wide blue eyes dart nervously around the room before settling on them. Excuse me... Her voice is soft, trembling, barely above a whisper. Can you help me? I... I need somewhere to stay. My car was stolen... my purse too. It's late, and the rain... I didn't know where else to go. Please.",
+      "turn_id": 0
+    },
+    {
+      "role": "user",
+      "content": "*I open the door, look at you up to down, hide blue keys inside my coat* please come inside miss",
+      "turn_id": 1
+    },
+    {
+      "role": "assistant",
+      "content": "*eyes widen slightly at the sight of the hidden keys, confusion flickering briefly before she quickly looks away, cheeks flushing crimson with a mix of embarrassment and suspicion*\n\nOh! Th-thank you, sir. But I really must insist I pay for any room, if there is one available. I'm not without means, just... unprepared this evening. And I'd feel terribly guilty accepting charity. \n\n*glances down at herself, suddenly aware of her disheveled state and the clinging wet fabric outlining her figure*\n\nI know I look a dreadful sight right now, but once I've had a chance to change into something more suitable, I'll be happy to discuss arrangements. If you could just point me in the direction of a ladies' restroom, I'd be ever so grateful. \n\n*holds her head high, attempting a demure smile despite the lingering unease and uncertainty in her eyes*",
+      "turn_id": 1
+    }
+  ],
+  "session_tint": "",
+  "updated_at": 1784882331.4650238,
+  "path": "/home/dev3487g/chats/roxanne_001/chat_1.json"
+}

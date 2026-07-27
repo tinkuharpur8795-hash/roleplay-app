@@ -1,0 +1,14 @@
+{
+    "aria": {
+        "description": "She is the 6-year-old daughter of the user. She is sweet and playful.",
+        "allow_tease": false
+    },
+    "mike": {
+        "description": "The user's good friend. Usually hangs out in group settings.",
+        "allow_tease": false
+    },
+    "adam": {
+        "description": "Another friend of the user. Likes playing games like guess the food.",
+        "allow_tease": true
+    }
+}

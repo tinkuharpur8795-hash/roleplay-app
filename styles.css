@@ -1,0 +1,2669 @@
+/* =============================================
+   CSS VARIABLES — MONOCHROMATIC SYSTEM
+   ============================================= */
+:root {
+  --bg-root:            #000000;
+  --bg-sidebar:         #050505;
+  --bg-main:            #09090B;
+  --bg-input:           #0D0D12;
+  --bg-elevated:        #111111;
+  --bg-hover:           #15151A;
+  --bg-hover-deep:      #1A1A1A;
+  --bg-email-pill:      #15151A;
+  --bg-chat-item-hover: #1A1A1A;
+  --bg-modal:           #09090B;
+
+  --border-strong: #1F1F28;
+  --border-mid:    #2A2A35;
+  --border-soft:   #222222;
+  --border-ctrl:   #333333;
+  --border-focus:  #444444;
+
+  --text-primary: #E4E4E5;
+  --text-body:    #F8F8F2;
+  --text-muted:   #A0A0A0;
+  --text-dimmer:  #8A8A93;
+  --text-typing:  #555555;
+  --text-action:  #6A7A96;
+  --text-system:  #666666;
+
+  --font-ui:   'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm:  4px;
+  --radius-md:  6px;
+  --radius-lg:  10px;
+  --radius-pill: 20px;
+
+  /* Message bubbles */
+  --bg-bubble-bot:    var(--bg-elevated);
+  --border-bubble-bot: var(--border-soft);
+  --bg-bubble-user:    #1B1B22;
+  --border-bubble-user: #34343F;
+
+  /* Centered chat column — width the message list and composer share */
+  --chat-col-width: 760px;
+}
+
+/* =============================================
+   RESET & BASE
+   ============================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none !important;
+}
+
+button {
+  font-family: var(--font-ui);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+input, select, textarea {
+  font-family: var(--font-ui);
+  color: inherit;
+}
+/* =============================================
+   SCROLL TO BOTTOM BUTTON
+   ============================================= */
+.scroll-bottom-btn {
+  position: absolute;
+  bottom: 85px; /* Sits above the input and util bar */
+  right: 24px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-hover-deep);
+  border: 1px solid var(--border-ctrl);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease, border-color 0.15s ease;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.scroll-bottom-btn.hidden {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+.scroll-bottom-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-focus);
+}
+
+/* Mobile adjustment to clear the input area and mobile active bar */
+@media (max-width: 768px) {
+  .scroll-bottom-btn {
+    bottom: 80px;
+    right: 16px;
+  }
+}
+
+/* =============================================
+   UTILITY
+   ============================================= */
+.hidden {
+  display: none !important;
+}
+
+/* Paired with the pre-paint check in index.html's <head> — resolves
+   visibility before first paint instead of waiting for DOMContentLoaded. */
+html.mc-authed #login-overlay {
+  display: none;
+}
+
+html.mc-authed #app.hidden {
+  display: flex; /* matches .app-root's own display value */
+}
+
+/* =============================================
+   LOGIN OVERLAY
+   ============================================= */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: var(--bg-root);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-box {
+  background: var(--bg-main);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.login-inner {
+  display: flex;
+  flex-direction: column;
+  padding: 40px;
+  width: 420px;
+}
+
+.login-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 5px;
+  letter-spacing: -0.3px;
+}
+
+.email-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-email-pill);
+  border-radius: var(--radius-pill);
+  padding: 8px 15px;
+  margin: 10px 0 25px;
+}
+
+.email-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.email-text {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.pw-label {
+  display: block;
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 5px;
+}
+
+.pw-input {
+  width: 340px;
+  height: 45px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  color: var(--text-body);
+  padding: 0 14px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.pw-input:focus {
+  border-color: var(--border-focus);
+}
+
+.pw-input::placeholder {
+  color: var(--text-dimmer);
+}
+
+.login-error {
+  display: block;
+  min-height: 18px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 4px 0 15px;
+}
+
+.login-btn-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.btn-signin {
+  width: 110px;
+  height: 38px;
+  background: var(--bg-hover-deep);
+  border: 1px solid var(--border-ctrl);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-signin:hover {
+  background: #222222;
+  border-color: var(--border-focus);
+}
+
+.btn-signin:active {
+  border-color: #555555;
+}
+
+/* =============================================
+   APP ROOT
+   ============================================= */
+.app-root {
+  display: flex;
+  flex-direction: row;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-root);
+}
+
+/* =============================================
+   SIDEBAR WRAP + SIDEBAR
+   The WRAP is the flex item that animates width and stays
+   overflow:visible, so .panel-collapse-btn is never clipped.
+   .sidebar itself tracks the wrap's width and clips .sidebar-inner
+   (fixed at 260px) so text/controls don't reflow while collapsing.
+   ============================================= */
+.sidebar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 240px;
+  transition: width 0.22s ease;
+  overflow: visible;
+}
+
+/* Collapsed = a persistent 56px icon rail, not fully hidden — matches
+   the reference: icons stay visible, labels hide, collapse button rests
+   on the rail instead of floating off the page edge. */
+.sidebar-wrap.panel--collapsed {
+  width: 56px;
+}
+
+.sidebar {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-sidebar);
+}
+
+.sidebar-inner {
+  width: 240px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 16px;
+  transition: width 0.22s ease, padding 0.22s ease;
+}
+
+.sidebar-wrap.panel--collapsed .sidebar-inner {
+  width: 56px;
+  /* extra top padding clears the collapse button, which sits at top:14px
+     height:32px (ends ~46px) — see .panel-collapse-btn below */
+  padding: 56px 8px 16px;
+}
+
+/* Labels hide in rail mode; icons + tooltips (title attr) carry the UI. */
+.sidebar-wrap.panel--collapsed .brand,
+.sidebar-wrap.panel--collapsed .nav-item span,
+.sidebar-wrap.panel--collapsed .user-profile-btn > span:not(.avatar-icon) {
+  display: none;
+}
+
+.sidebar-wrap.panel--collapsed .nav-item,
+.sidebar-wrap.panel--collapsed .user-profile-btn {
+  justify-content: center;
+}
+
+/* Keep the chats drawer docked to whichever sidebar width is current —
+   it always spans from the sidebar's right edge to the screen edge. */
+.sidebar-wrap.panel--collapsed ~ .chats-drawer {
+  left: 56px;
+}
+
+/* =============================================
+   SHARED NAV SIDEBAR — dimensionally and structurally identical to
+   home.html's .sidebar (same width, padding, brand text, nav items,
+   footer button — nothing else lives in here). That parity is what
+   makes switching pages read as one persistent sidebar. Values below
+   are copied 1:1 from home.html's inline <style>, remapped only to
+   this file's equivalent tokens (--bg-hover-deep == home's --bg-active,
+   --border-strong == home's --border-color, --text-muted == home's
+   --text-secondary, --radius-lg == home's --radius-pill at 10px).
+   ============================================= */
+.brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 0 8px;
+  margin-bottom: 24px;
+  font-family: var(--font-ui);
+  flex-shrink: 0;
+}
+
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 10px 10px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-item svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.user-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.user-profile-btn:hover {
+  background: var(--bg-hover);
+}
+
+.user-profile-btn .avatar-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bg-hover-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* =============================================
+   CHATS DRAWER — overlay over the main content, opened by the "Chats"
+   nav button. Not inline sidebar content, so the persistent sidebar's
+   size never changes when this is open. Placeholder layout until the
+   dedicated second-sidebar design replaces it.
+   ============================================= */
+.chats-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 90;
+}
+
+.chats-drawer-backdrop.hidden {
+  display: none;
+}
+
+.chats-drawer {
+  position: fixed;
+  top: 0;
+  left: 240px;
+  right: 0;
+  width: auto;
+  height: 100vh;
+  background: var(--bg-sidebar);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 32px;
+  overflow: hidden;
+}
+
+.chats-drawer.hidden {
+  display: none;
+}
+
+.chats-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.chats-drawer-close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-md);
+}
+
+.chats-drawer-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* =============================================
+   PANEL COLLAPSE TOGGLE (shared by left sidebar + right character panel)
+   Small rounded-square "panel" icon button with a hover tooltip,
+   matching the reference design. Sits top-right of the left sidebar /
+   top-left of the right panel while expanded. When its panel collapses,
+   it slides to a fixed spot at the screen edge so it's always reachable.
+   ============================================= */
+.panel-collapse-btn {
+  position: absolute;
+  top: 14px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 20;
+  transition: color 0.15s ease, left 0.22s ease, right 0.22s ease;
+}
+
+.panel-collapse-btn:hover {
+  color: var(--text-primary);
+}
+
+.panel-collapse-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.panel-collapse-btn:hover .panel-collapse-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* LEFT SIDEBAR TOGGLE — sits at top-right of the sidebar in both expanded
+   (240px) and collapsed (56px rail) states; right:14px lands it centered
+   on the rail either way, so it never needs to reposition itself. */
+.panel-collapse-btn--left {
+  right: 14px;
+}
+
+/* RIGHT CHARACTER PANEL TOGGLE — top-left corner while expanded;
+   slides to the top-right of the screen when collapsed. */
+.panel-collapse-btn--right {
+  left: 14px;
+}
+
+.charpanel-wrap.panel--collapsed .panel-collapse-btn--right {
+  left: auto;
+  right: 10px;
+}
+
+.sidebar-logo {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  padding: 20px 0px 10px 20px; /* <--- NEW PADDING */
+  letter-spacing: -0.5px;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* SIDEBAR HEADER & MANAGE BUTTON */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 52px; /* leaves room for the collapse toggle button */
+  gap: 8px;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.manage-char-btn {
+  width: 28px;
+  height: 28px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.manage-char-btn:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+.sidebar-section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 10px 20px 0;
+  flex-shrink: 0;
+}
+
+/* SELECT WRAPPER */
+.select-wrapper {
+  position: relative;
+  margin: 5px 20px 10px;
+  flex-shrink: 0;
+}
+
+.custom-select {
+  width: 100%;
+  height: 34px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  padding: 0 32px 0 10px;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.custom-select:focus {
+  border-color: var(--border-focus);
+}
+
+.custom-select option {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 16px;
+  pointer-events: none;
+  line-height: 1;
+}
+
+/* CHAT CTRL ROW */
+.chat-ctrl-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px 20px;
+  flex-shrink: 0;
+}
+
+.ctrl-btn {
+  flex: 1;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--border-ctrl);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ctrl-btn:hover {
+  background: var(--bg-hover-deep);
+  border-color: var(--border-focus);
+}
+
+.ctrl-btn:active {
+  border-color: #555555;
+}
+
+/* CHATS LIST — ported 1:1 from home.html's Chats view so both pages
+   render identically. Class names (chats-list, chat-row, etc.) match
+   home.html's exactly. .chat-row.active is this file's addition, to
+   highlight whichever chat is currently open in the main window
+   (home.html has no such concept since it's never "inside" a chat). */
+.chats-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 10px;
+}
+
+.chats-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.chats-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chats-list::-webkit-scrollbar-thumb {
+  background: var(--border-ctrl);
+  border-radius: 2px;
+}
+
+.chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 8px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.chat-row:hover {
+  background: var(--bg-hover);
+}
+
+.chat-row.active {
+  background: var(--bg-hover-deep);
+}
+
+.chat-row-select {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.chats-list.edit-mode .chat-row-select {
+  display: flex;
+}
+
+.chat-row-select.checked {
+  border-color: var(--text-primary);
+  background: var(--text-primary);
+}
+
+.chat-row-select.checked::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bg-root);
+}
+
+.chat-row-avatar {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat-row-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-row-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-row-date {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.chat-row-preview {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-row-preview.placeholder {
+  font-style: italic;
+}
+
+.chats-empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+/* SEARCH BAR — ported from home.html, used in the Chats drawer here. */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  padding: 9px 14px;
+  margin: 0 0 10px;
+  flex-shrink: 0;
+}
+
+.search-bar svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.search-bar input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.search-bar input::placeholder {
+  color: var(--text-muted);
+}
+
+/* CHATS TOOLBAR — Edit toggle, ported from home.html. */
+.chats-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+  flex-shrink: 0;
+}
+
+.chats-edit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.chats-edit-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.chats-edit-toggle.active {
+  background: var(--bg-hover-deep);
+}
+
+/* FLOATING BULK-SELECT BAR — ported from home.html, unchanged. */
+.chats-editbar {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #1C1C1F;
+  color: #fff;
+  padding: 10px 10px 10px 18px;
+  border-radius: 999px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35), 0 8px 20px rgba(0,0,0,0.4);
+  z-index: 120;
+}
+
+.chats-editbar.hidden {
+  display: none;
+}
+
+.chats-editbar-label {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chats-editbar-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255,255,255,0.18);
+}
+
+.chats-editbar-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.35);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: default;
+  padding: 6px 4px;
+}
+
+.chats-editbar-delete:not(:disabled) {
+  color: #FF6B5E;
+  cursor: pointer;
+}
+
+.chats-editbar-done {
+  border: none;
+  background: #fff;
+  color: #111;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* SIDEBAR UTILS */
+.sidebar-utils {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px 20px 20px;
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+.sidebar-util-btn {
+  width: 100%;
+  height: 34px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  text-align: left;
+  padding: 0 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-util-btn:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+/* =============================================
+   VERTICAL SEPARATOR
+   ============================================= */
+.vertical-separator {
+  width: 2px;
+  flex-shrink: 0;
+  background: var(--border-strong);
+  align-self: stretch;
+}
+
+/* =============================================
+   MAIN CONTAINER
+   ============================================= */
+.main-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-main);
+  overflow: hidden;
+  min-width: 0;
+  position: relative;
+}
+
+/* =============================================
+   CHAT DISPLAY
+   ============================================= */
+/* =============================================
+   CHAT DISPLAY
+   ============================================= */
+.chat-display {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  background: var(--bg-main);
+  /* HARDWARE ACCELERATION: Offload scrolling to the GPU so the UI stays smooth even when the local LLM pegs the CPU to 100% */
+  transform: translateZ(0);
+  will-change: transform, scroll-position;
+}
+
+.chat-display::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-display::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-display::-webkit-scrollbar-thumb {
+  background: var(--border-ctrl);
+  border-radius: 2px;
+}
+
+#chat-container {
+  max-width: var(--chat-col-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 16px 10px;
+}
+
+/* =============================================
+   MESSAGE ROWS
+   ============================================= */
+.message-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 6px 0;
+}
+
+/* Avatars aren't part of the bubble design — the box itself carries
+   the message, so the icon column is dropped and msg-content owns
+   the full row width. */
+.avatar {
+  display: none;
+}
+
+.msg-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* User messages hug the right edge of the centered column */
+.user-row .msg-content {
+  align-items: flex-end;
+}
+
+.msg-text {
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: 14.5px;
+  line-height: 1.7;
+  word-break: break-word;
+  white-space: pre-wrap;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+}
+
+/* Bot reply — full-width card, like the reference screenshot */
+.bot-row .msg-text {
+  width: 100%;
+  background: var(--bg-bubble-bot);
+  border: 1px solid var(--border-bubble-bot);
+  padding: 16px 20px;
+}
+
+/* User message — right-aligned pill, sized to its content */
+.user-row .msg-text {
+  max-width: 72%;
+  background: var(--bg-bubble-user);
+  border: 1px solid var(--border-bubble-user);
+  padding: 13px 18px;
+}
+
+.msg-text em.action-text {
+  font-style: italic;
+  color: var(--text-action);
+  font-weight: 400;
+}
+
+/* ===================== MESSAGE ACTIONS (copy + edit) ===================== */
+/* Bar sits BELOW the message text, inside .msg-content, so it's anchored
+   to the bottom of the bubble instead of floating beside the avatar at
+   the top. Hidden until the row is hovered, and hidden entirely while
+   that message is still streaming in or already being edited. */
+.msg-actions-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.message-row:hover .msg-actions-bar {
+  opacity: 1;
+}
+
+.message-row.editing .msg-actions-bar,
+.message-row:has(.msg-text.streaming) .msg-actions-bar {
+  display: none;
+}
+
+.msg-action-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+
+.msg-action-btn:hover {
+  color: var(--text-primary);
+}
+
+.msg-copy-btn.copied {
+  color: #4ADE80;
+}
+
+.msg-edit-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 120px;
+  max-height: 60vh;
+  margin-top: 6px;
+  resize: vertical;
+  overflow-y: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-md);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.msg-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.msg-edit-save-btn,
+.msg-edit-cancel-btn {
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.msg-edit-save-btn {
+  background: var(--text-primary);
+  color: var(--bg-root);
+}
+
+.msg-edit-save-btn:hover:not(:disabled) { opacity: 0.85; }
+.msg-edit-save-btn:disabled { opacity: 0.5; cursor: default; }
+
+.msg-edit-cancel-btn {
+  background: transparent;
+  border: 1px solid var(--border-ctrl);
+  color: var(--text-muted);
+}
+
+.msg-edit-cancel-btn:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+.msg-edit-error {
+  font-size: 12px;
+  color: #E5675F;
+  margin-top: 5px;
+  min-height: 1em;
+}
+
+/* Gap after bot messages — no visible rule, just breathing room between bubbles */
+.msg-separator {
+  height: 10px;
+  background: none;
+  border: none;
+  margin: 0;
+}
+
+/* Gap after user messages */
+.msg-spacer {
+  height: 10px;
+}
+
+/* System message */
+.system-message {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-system);
+  padding: 5px 20px;
+}
+
+/* =============================================
+   TYPING INDICATOR
+   ============================================= */
+.typing-indicator {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 20px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-typing);
+  display: flex;
+  align-items: center;
+}
+
+/* =============================================
+   UTILITY BAR
+   ============================================= */
+.util-bar {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+  max-width: var(--chat-col-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 16px 5px;
+  box-sizing: border-box;
+}
+
+.util-btn {
+  flex: 1;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  color: var(--text-dimmer);
+  font-size: 11px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.util-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border-color: var(--border-ctrl);
+}
+
+.util-btn:active {
+  border-color: var(--border-focus);
+}
+
+/* =============================================
+   INPUT AREA
+   ============================================= */
+.input-area {
+  display: flex;
+  flex-shrink: 0;
+  gap: 5px;
+  max-width: var(--chat-col-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 16px 15px;
+  box-sizing: border-box;
+}
+
+/* Wrapper makes the send button sit inside the input field */
+.input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.user-input {
+  width: 100%;
+  height: 45px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  color: var(--text-body);
+  padding: 0 52px 0 14px;
+  font-size: 14px;
+  font-family: var(--font-ui);
+  outline: none;
+  transition: border-color 0.15s ease;
+  min-width: 0;
+}
+
+.user-input:focus {
+  border-color: var(--border-focus);
+}
+
+.user-input::placeholder {
+  color: var(--text-dimmer);
+}
+
+.send-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 33px;
+  flex-shrink: 0;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-ctrl);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.send-btn:hover {
+  background: #22222C;
+  border-color: var(--border-focus);
+}
+
+.send-btn:active {
+  border-color: #555555;
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* =============================================
+   CONFIRM DELETE MODAL
+   ============================================= */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-box {
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px;
+  min-width: 300px;
+  max-width: 380px;
+}
+
+.modal-title {
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.modal-btn-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-btn {
+  height: 36px;
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.modal-btn--cancel {
+  background: transparent;
+  border: 1px solid var(--border-ctrl);
+  color: var(--text-muted);
+}
+
+.modal-btn--cancel:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+.modal-btn--confirm {
+  background: var(--bg-hover-deep);
+  border: 1px solid var(--border-focus);
+  color: var(--text-primary);
+}
+
+.modal-btn--confirm:hover {
+  background: #222222;
+}
+
+.modal-btn--confirm:active {
+  border-color: #555555;
+}
+
+/* =============================================
+   SETTINGS MODAL
+   ============================================= */
+.settings-modal-box {
+  min-width: 360px;
+  max-width: 460px;
+  width: 100%;
+}
+
+.settings-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.settings-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.settings-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.settings-close-btn:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  row-gap: 14px;
+  column-gap: 16px;
+}
+
+.settings-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.settings-value {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  text-align: right;
+  word-break: break-all;
+}
+
+/* =============================================
+   AI CHARACTER WRITER MODAL
+   ============================================= */
+.char-writer-modal-box {
+  min-width: 360px;
+  max-width: 560px;
+  width: 100%;
+}
+
+.char-writer-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.char-writer-hint {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-dimmer);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+.char-writer-textarea {
+  width: 100%;
+  min-height: 150px;
+  max-height: 420px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  color: var(--text-body);
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s ease;
+}
+
+.char-writer-textarea:focus {
+  border-color: var(--border-focus);
+}
+
+.char-writer-textarea::placeholder {
+  color: var(--text-dimmer);
+}
+
+.char-writer-counter {
+  text-align: right;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-dimmer);
+  margin-top: 4px;
+}
+
+.char-writer-counter.near-limit {
+  color: #c9a14a;
+}
+
+.char-writer-status {
+  min-height: 18px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 10px 0 4px;
+}
+
+.char-writer-status.error {
+  color: #b97a7a;
+  font-style: normal;
+}
+
+.modal-btn--generate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-btn--generate:disabled,
+.modal-btn--cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.char-writer-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(228, 228, 229, 0.25);
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  animation: char-writer-spin 0.7s linear infinite;
+}
+
+@keyframes char-writer-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =============================================
+   SCENE IMAGE
+   ============================================= */
+.scene-image-wrapper {
+  padding: 10px 20px 0;
+}
+
+.scene-image-caption {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-system);
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.scene-image {
+  width: 100%;
+  max-width: 480px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  display: block;
+}
+
+/* =============================================
+   ACTIVE STATE BAR
+   ============================================= */
+.active-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 20px;
+  background: #050505;
+  border-bottom: 1px solid var(--border-strong);
+  gap: 12px;
+  overflow: hidden;
+}
+
+.active-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.active-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Green dot — shows session is live */
+.active-bar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3a3a3a;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px #1a1a1a;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Dot turns bright when a character is selected */
+.active-bar-dot.live {
+  background: #e4e4e5;
+  box-shadow: 0 0 6px rgba(228, 228, 229, 0.25);
+}
+
+.active-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dimmer);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.active-bar-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  flex-shrink: 0;
+}
+
+/* Character avatar for the mobile header — hidden on desktop, where the
+   green dot + "Character:" label are used instead (see mobile media
+   query below). */
+.active-bar-avatar {
+  display: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-hover-deep);
+}
+
+/* Three-dot "more options" button — mobile only. Opens .active-bar-right
+   (the Model selector) as a dropdown instead of showing it inline. */
+.active-bar-menu-btn {
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.active-bar-menu-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* Model select lives in the top bar now (moved out of the sidebar to
+   keep the sidebar's height identical to home.html's). Styled to look
+   like the plain label it replaced. */
+.active-model-select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  max-width: 260px;
+  cursor: pointer;
+}
+
+.active-model-select:hover,
+.active-model-select:focus {
+  color: var(--text-primary);
+}
+
+/* =============================================
+   SHOW THOUGHTS TOGGLE
+   ============================================= */
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0 6px;
+  border-top: 1px solid var(--border-strong);
+  margin-top: 14px;
+}
+
+.thoughts-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toggle-track {
+  width: 36px;
+  height: 20px;
+  background: #222;
+  border: 1px solid var(--border-ctrl);
+  border-radius: 10px;
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  background: #555;
+  border-radius: 50%;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+/* ON state */
+.thoughts-toggle-btn.on .toggle-track {
+  background: #2a2a35;
+  border-color: #555;
+}
+
+.thoughts-toggle-btn.on .toggle-thumb {
+  transform: translateX(16px);
+  background: var(--text-primary);
+}
+
+.toggle-label-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  min-width: 20px;
+}
+
+.thoughts-toggle-btn.on .toggle-label-text {
+  color: var(--text-primary);
+}
+
+/* Open Activity Log button inside settings */
+.settings-log-btn {
+  width: 100%;
+  margin-top: 12px;
+  height: 34px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  text-align: left;
+  padding: 0 14px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.settings-log-btn:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+/* =============================================
+   ACTIVITY LOG PANEL
+   ============================================= */
+.log-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 460px;
+  height: 320px;
+  background: #050505;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  z-index: 900;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  overflow: hidden;
+  /* Draggable — JS handles it */
+}
+
+.log-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #0a0a0a;
+  border-bottom: 1px solid var(--border-strong);
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-panel-header:active {
+  cursor: grabbing;
+}
+
+.log-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  letter-spacing: 0.04em;
+}
+
+.log-panel-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.log-ctrl-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dimmer);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.log-ctrl-btn:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+.log-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: #666;
+}
+
+.log-body::-webkit-scrollbar { width: 3px; }
+.log-body::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+
+.log-line {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 1px 0;
+  border-bottom: 1px solid #0d0d0d;
+}
+
+/* Color-code by bracket prefix */
+.log-line.brain   { color: #7a88a6; }   /* [🧠  */
+.log-line.scene   { color: #8a8a93; }   /* [SCENE */
+.log-line.delete  { color: #666; }      /* [🗑️  */
+.log-line.error   { color: #7a5a5a; }   /* [⚠️  */
+.log-line.success { color: #5a7a5a; }   /* [✅  */
+.log-line.rel     { color: #6a7a8a; }   /* [🔄 REL */
+.log-line.boot    { color: #888; }      /* [BOOT */
+.log-line.filter  { color: #7a7a5a; }   /* [🛡️  */
+
+.log-panel-footer {
+  padding: 4px 12px;
+  background: #0a0a0a;
+  border-top: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.log-status {
+  font-size: 10px;
+  color: #444;
+  font-family: var(--font-mono);
+}
+
+.log-status.connected {
+  color: #4a5a4a;
+}
+
+/* =============================================
+   THOUGHTS TOGGLE SWITCH
+   ============================================= */
+.settings-thoughts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.settings-thoughts-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.thoughts-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toggle-track {
+  width: 36px;
+  height: 20px;
+  background: #222;
+  border: 1px solid var(--border-ctrl);
+  border-radius: 10px;
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  background: #555;
+  border-radius: 50%;
+  transition: left 0.2s ease, background 0.2s ease;
+}
+
+/* ON state */
+.thoughts-toggle-btn.toggle-on .toggle-track {
+  background: #2a2a2a;
+  border-color: #555;
+}
+
+.thoughts-toggle-btn.toggle-on .toggle-thumb {
+  left: 19px;
+  background: var(--text-primary);
+}
+
+.toggle-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 18px;
+  font-family: var(--font-mono);
+}
+
+/* =============================================
+   ACTIVITY LOG PANEL
+   ============================================= */
+.log-panel {
+  position: fixed;
+  bottom: 70px;
+  right: 20px;
+  width: 440px;
+  height: 320px;
+  background: #060608;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  z-index: 900;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  overflow: hidden;
+  resize: both;
+}
+
+.log-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #09090B;
+  border-bottom: 1px solid var(--border-strong);
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-panel-header:active {
+  cursor: grabbing;
+}
+
+.log-panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.log-panel-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.log-ctrl-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dimmer);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s, color 0.12s;
+}
+
+.log-ctrl-btn:hover {
+  background: var(--bg-hover-deep);
+  color: var(--text-primary);
+}
+
+.log-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: #666;
+}
+
+.log-output::-webkit-scrollbar      { width: 3px; }
+.log-output::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+
+.log-line {
+  word-break: break-all;
+  padding: 1px 0;
+  border-bottom: 1px solid #0d0d0d;
+}
+
+.log-line.log-warn  { color: #6a5a5a; }
+.log-line.log-ok    { color: #4a5a4a; }
+.log-line.log-info  { color: #4a4a6a; }
+
+.log-panel-footer {
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.log-status {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: #555;
+}
+
+/* Floating toggle button — bottom right corner */
+.log-toggle-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 42px;
+  height: 42px;
+  background: #0d0d12;
+  border: 1px solid var(--border-mid);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 901;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  position: fixed;
+}
+
+.log-toggle-btn:hover {
+  background: var(--bg-hover-deep);
+  border-color: var(--border-ctrl);
+}
+
+.log-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #333;
+  color: var(--text-primary);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* =============================================
+   STREAMING CURSOR & STATES
+   ============================================= */
+
+/* Blinking block cursor shown while streaming */
+.stream-cursor {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  animation: blink-cursor 0.8s step-end infinite;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* While streaming — slightly dimmer so cursor stands out */
+.msg-text.streaming {
+  opacity: 0.9;
+}
+
+/* Error state inside a message bubble */
+.msg-text.msg-error {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* =============================================
+   CHARACTER PANEL (right sidebar)
+   Mirrors the .sidebar-wrap / .sidebar pattern: the WRAP animates width
+   and stays overflow:visible for the toggle button; the panel itself
+   clips its fixed-width inner content.
+   ============================================= */
+.charpanel-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 300px;
+  transition: width 0.22s ease;
+  overflow: visible;
+}
+
+.charpanel-wrap.panel--collapsed {
+  width: 0;
+}
+
+.character-panel {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border-strong);
+}
+
+.charpanel-inner {
+  width: 300px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.15s ease;
+}
+
+.charpanel-wrap.panel--collapsed .charpanel-inner {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* IMAGE GALLERY */
+.charpanel-gallery {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.charpanel-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.charpanel-image.hidden {
+  display: none;
+}
+
+.charpanel-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dimmer);
+  font-size: 13px;
+}
+
+.charpanel-empty-icon {
+  font-size: 28px;
+  opacity: 0.6;
+}
+
+.charpanel-empty.hidden {
+  display: none;
+}
+
+.charpanel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  z-index: 3;
+}
+
+.charpanel-nav:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.charpanel-nav.hidden {
+  display: none;
+}
+
+.charpanel-nav--prev { left: 10px; }
+.charpanel-nav--next { right: 10px; }
+
+.charpanel-counter {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--text-body);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  z-index: 3;
+}
+
+.charpanel-counter.hidden {
+  display: none;
+}
+
+/* THUMBNAIL STRIP */
+.charpanel-thumbs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px 0;
+  flex-shrink: 0;
+}
+
+.charpanel-thumbs.hidden {
+  display: none;
+}
+
+.charpanel-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.charpanel-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.charpanel-thumb:hover {
+  opacity: 0.85;
+}
+
+.charpanel-thumb.active {
+  opacity: 1;
+  border-color: var(--text-primary);
+}
+
+/* INFO */
+.charpanel-info {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.charpanel-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.charpanel-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+}
+
+.charpanel-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dimmer);
+}
+
+.charpanel-meta:empty {
+  display: none;
+}
+
+.charpanel-desc {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.charpanel-desc.expanded {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.charpanel-desc:empty {
+  display: none;
+}
+
+.charpanel-seemore {
+  margin-top: 6px;
+  background: none;
+  border: none;
+  color: var(--text-action);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.charpanel-seemore:hover {
+  color: var(--text-primary);
+}
+
+.charpanel-seemore.hidden {
+  display: none;
+}
+
+/* =============================================
+   CHARACTER PANEL — gallery add/delete + description editing
+   ============================================= */
+.charpanel-thumb {
+  position: relative;
+}
+
+.charpanel-thumb-delete {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #C0392B;
+  color: #fff;
+  border: none;
+  font-size: 10px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.charpanel-thumb:hover .charpanel-thumb-delete {
+  display: flex;
+}
+
+.charpanel-thumb-add {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  border: 1px dashed var(--border-mid);
+  background: var(--bg-elevated);
+  color: var(--text-dimmer);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.charpanel-thumb-add:hover {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.charpanel-thumb-add.hidden {
+  display: none;
+}
+
+/* DESCRIPTION EDIT */
+.charpanel-desc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.charpanel-desc-row .charpanel-desc {
+  flex: 1;
+  margin-top: 12px;
+}
+
+.charpanel-desc-edit {
+  flex-shrink: 0;
+  margin-top: 14px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-dimmer);
+  cursor: pointer;
+}
+
+.charpanel-desc-edit:hover {
+  color: var(--text-primary);
+}
+
+.charpanel-desc-edit.hidden {
+  display: none;
+}
+
+.charpanel-desc-editbox {
+  margin-top: 12px;
+}
+
+.charpanel-desc-editbox.hidden {
+  display: none;
+}
+
+.charpanel-desc-textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--bg-input);
+  border: 1px solid var(--border-ctrl);
+  border-radius: var(--radius-md);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+
+.charpanel-desc-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.charpanel-desc-editbtns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.charpanel-desc-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.charpanel-desc-btn--save {
+  background: var(--text-primary);
+  color: #000;
+  border-color: var(--text-primary);
+}
+
+.charpanel-desc-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* =============================================
+   MOBILE (phones) — left/right sidebars, Continue/Scene
+   utility buttons, and the top-right model selector are
+   all switched off below this width. Chat column expands
+   to fill the freed space since .app-root is a flex row.
+   ============================================= */
+@media (max-width: 768px) {
+  .sidebar-wrap,
+  .charpanel-wrap,
+  #sidebar-collapse-btn,
+  #charpanel-collapse-btn {
+    display: none;
+  }
+
+  .util-btn[data-action="continue"],
+  .util-btn[data-action="scene"] {
+    display: none;
+  }
+
+  .active-bar {
+    position: relative;
+    overflow: visible;
+  }
+
+  .active-bar-dot,
+  .active-bar-left > .active-bar-label {
+    display: none;
+  }
+
+  .active-bar-avatar {
+    display: block;
+    width: 42px;
+    height: 42px;
+  }
+
+  .active-bar-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    padding: 6px 10px;
+    min-width: 40px;
+    min-height: 40px;
+    position: relative;
+    z-index: 60;
+  }
+
+  /* Model row becomes a dropdown anchored under the three-dot button,
+     closed by default and opened via .menu-open (toggled in script.js).
+     position: fixed (not absolute) so it can't get clipped by
+     .active-bar or any other ancestor's overflow. */
+  .active-bar-right {
+    display: none;
+    position: fixed;
+    top: 46px;
+    right: 12px;
+    margin-top: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 200;
+  }
+
+  .active-bar-right.menu-open {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .chats-drawer {
+    left: 0;
+  }
+
+  /* Push the composer up above the on-screen nav bar / home indicator
+     that modern phones overlay on the bottom of the screen. Falls back
+     to 0 on devices that don't report a safe-area inset. */
+  .input-area {
+    padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-root {
+    height: 100dvh;
+  }
+}

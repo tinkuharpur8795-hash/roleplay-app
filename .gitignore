@@ -1,0 +1,6 @@
+.env
+.catch/
+ .virtualenvs/
+__pycache__/
+*.pyc histories/ 
+

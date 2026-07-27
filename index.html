@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <script>
+    (function () {
+      var authed = sessionStorage.getItem('mc_authenticated') === '1';
+      var hasCharacterParam = new URLSearchParams(window.location.search).has('character');
+
+      // Authenticated + no character param means this is a bare visit to the
+      // chat page (bookmark, typed URL, back button to "index.html") rather
+      // than an arrival from home.html's character grid/chat list. Send it
+      // through home.html first, same as the normal post-login flow —
+      // replace() so it doesn't leave an extra back-button entry.
+      if (authed && !hasCharacterParam) {
+        window.location.replace('home.html');
+        return;
+      }
+
+      // Otherwise resolve login-overlay/app visibility before first paint,
+      // so an authenticated session never flashes the login screen.
+      document.documentElement.classList.toggle('mc-authed', authed);
+    })();
+  </script>
+  <title>AI Character Roleplay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- LOGIN OVERLAY -->
+  <div id="login-overlay" class="login-overlay" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="login-box">
+      <div class="login-inner">
+        <h1 class="login-title" id="login-title">Sign in</h1>
+        <div class="email-pill">
+          <span class="email-icon">👤</span>
+          <span class="email-text"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a1c0c5ccc8cfcfc8d5c8d2c994979695e1ced4d5cdcececa8fc2cecc">[email&#160;protected]</a></span>
+        </div>
+        <label class="pw-label" for="pw-input">Enter password</label>
+        <input type="password" id="pw-input" class="pw-input" placeholder="Password" autocomplete="current-password" />
+        <span id="login-error" class="login-error" aria-live="polite"></span>
+        <div class="login-btn-row">
+          <button id="login-btn" class="btn-signin">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="app" class="app-root hidden" role="main">
+
+    <!-- SIDEBAR WRAP — this element (not .sidebar itself) is what animates
+         width on collapse. It stays overflow:visible so the toggle button
+         is NEVER clipped, no matter how narrow .sidebar gets. -->
+    <div id="sidebar-wrap" class="sidebar-wrap">
+      <aside id="sidebar" class="sidebar" aria-label="Sidebar">
+        <div class="sidebar-inner">
+          <div class="brand">MultiChat AI</div>
+
+          <!-- Identical markup/classes/dimensions to home.html's sidebar —
+               this is what makes switching pages read as one persistent
+               sidebar instead of two different ones. Don't add anything
+               inline here (model select, chat list, etc.) or the two
+               pages' sidebars will drift apart in height again. -->
+          <nav class="nav-list">
+            <button class="nav-item" id="nav-characters" title="Characters">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+              <span>Characters</span>
+            </button>
+            <button class="nav-item" id="nav-create" title="Create Character">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              <span>Create Character</span>
+            </button>
+            <button class="nav-item" id="nav-edit-character" title="Edit Character">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 2 4 4-13 13H5v-4L18 2Z"/><path d="M14.5 5.5 18.5 9.5"/></svg>
+              <span>Edit Character</span>
+            </button>
+            <button class="nav-item" id="nav-chats" title="Chats">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-4.8 7.6 8.5 8.5 0 0 1-9.4-1.8L3 21l1.9-4.8a8.38 8.38 0 0 1-1.4-4.7 8.5 8.5 0 0 1 8.5-8.5h.3a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              <span>Chats</span>
+            </button>
+            <button id="settings-btn" class="nav-item" title="Settings">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>Settings</span>
+            </button>
+          </nav>
+
+          <div class="sidebar-footer">
+            <button class="user-profile-btn">
+              <span class="avatar-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+              </span>
+              <span>User Profile</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Character is chosen on home.html, not here — kept only as the
+           state store the rest of script.js reads via charSelect.value. -->
+      <select id="char-select" class="hidden" aria-hidden="true">
+        <option value="">Select Character</option>
+      </select>
+
+      <button id="sidebar-collapse-btn" class="panel-collapse-btn panel-collapse-btn--left" title="Minimize" aria-label="Minimize sidebar" aria-expanded="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+          <line x1="9.5" y1="4" x2="9.5" y2="20"></line>
+        </svg>
+        <span class="panel-collapse-tooltip">Minimize</span>
+      </button>
+    </div>
+
+    <!-- CHATS DRAWER — overlay, not inline sidebar content, so the
+         persistent sidebar's height/width never changes when this opens.
+         Toggled by the "Chats" nav button. Mirrors home.html's Chats view
+         (same ids/classes: chats-search, chats-edit-toggle, chats-list,
+         chat-row, chats-editbar) so both pages show the identical UI —
+         just adapted to load a chat in-page instead of navigating away. -->
+    <div id="chats-drawer-backdrop" class="chats-drawer-backdrop hidden"></div>
+    <div id="chats-drawer" class="chats-drawer hidden" aria-label="Chats">
+      <div class="chats-drawer-header">
+        <span>Chats</span>
+        <button id="chats-drawer-close" class="chats-drawer-close" title="Close" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="chat-ctrl-row">
+        <button id="new-chat-btn" class="ctrl-btn ctrl-btn--new" title="New Chat">+ New</button>
+        <button id="del-chat-btn" class="ctrl-btn ctrl-btn--del" title="Delete Current Chat">🗑️ Del</button>
+      </div>
+
+      <div class="search-bar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="chats-search" placeholder="Search Chats..." autocomplete="off">
+      </div>
+
+      <div class="chats-toolbar">
+        <button id="chats-edit-toggle" class="chats-edit-toggle" type="button">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          <span id="chats-edit-toggle-label">Edit</span>
+        </button>
+      </div>
+
+      <div class="chats-list" id="chats-list"></div>
+    </div>
+
+    <!-- Floating bulk-select bar — shown only while the drawer's list is
+         in edit mode. Same markup/behavior as home.html's. -->
+    <div id="chats-editbar" class="chats-editbar hidden">
+      <span class="chats-editbar-label">Select chats</span>
+      <span class="chats-editbar-divider"></span>
+      <button id="chats-delete-btn" class="chats-editbar-delete" type="button" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        <span>Delete</span>
+      </button>
+      <span class="chats-editbar-divider"></span>
+      <button id="chats-editbar-done" class="chats-editbar-done" type="button">Done</button>
+    </div>
+
+    <!-- VERTICAL SEPARATOR -->
+    <div class="vertical-separator" role="separator" aria-hidden="true"></div>
+
+    <!-- MAIN CHAT AREA -->
+    <section id="main" class="main-container" aria-label="Chat area">
+
+      <!-- ACTIVE STATE BAR -->
+      <div id="active-bar" class="active-bar">
+        <div class="active-bar-left">
+          <img id="active-bar-avatar" class="active-bar-avatar" src="" alt="" />
+          <span class="active-bar-dot"></span>
+          <span class="active-bar-label">Character:</span>
+          <span id="active-char-name" class="active-bar-value">—</span>
+        </div>
+        <div id="active-bar-right" class="active-bar-right">
+          <span class="active-bar-label">Model:</span>
+          <select id="model-select" class="active-model-select" aria-label="Select AI Model"></select>
+        </div>
+        <button id="active-bar-menu-btn" class="active-bar-menu-btn" type="button"
+                aria-label="More options" aria-haspopup="true" aria-expanded="false">&#8942;</button>
+      </div>
+
+      <!-- CHAT DISPLAY -->
+      <div id="chat-display" class="chat-display" role="log" aria-live="polite" aria-label="Chat messages">
+        <div id="chat-container"></div>
+      </div>
+
+      <!-- TYPING INDICATOR -->
+      <div id="typing-indicator" class="typing-indicator" aria-live="polite" aria-atomic="true"></div>
+
+      <!-- SCROLL TO BOTTOM BUTTON -->
+      <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" title="Scroll to bottom" aria-label="Scroll to bottom">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <!-- UTILITY BUTTONS -->
+      <div id="util-bar" class="util-bar" role="toolbar" aria-label="Chat utilities">
+        <button class="util-btn" data-action="stop"        title="Stop generating">■ Stop</button>
+        <button class="util-btn" data-action="retry"       title="Retry last message">🔄 Retry</button>
+        <button class="util-btn" data-action="undo"        title="Undo last message">↩️ Undo</button>
+        <button class="util-btn" data-action="continue"    title="Continue response">⏩ Cont.</button>
+        <button class="util-btn" data-action="scene"       title="Auto Scene">🎬 Scene</button>
+        <button class="util-btn" data-action="impersonate" title="Impersonate">🤖 Impersonate</button>
+      </div>
+
+      <!-- INPUT AREA -->
+      <div id="input-area" class="input-area">
+        <div class="input-wrapper">
+          <input type="text" id="user-input" class="user-input" placeholder="Type your message..."
+                 autocomplete="off" aria-label="Message input" maxlength="4000" />
+          <button id="send-btn" class="send-btn" title="Send message" aria-label="Send">&#10148;</button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- CHARACTER PANEL WRAP (right sidebar) — same unclipped-wrapper
+         pattern as the left sidebar, mirrored. -->
+    <div id="charpanel-wrap" class="charpanel-wrap">
+      <aside id="character-panel" class="character-panel" aria-label="Character details">
+        <div class="charpanel-inner">
+
+          <!-- IMAGE GALLERY -->
+          <div id="charpanel-gallery" class="charpanel-gallery">
+            <img id="charpanel-image" class="charpanel-image" src="" alt="" />
+            <div id="charpanel-empty" class="charpanel-empty">
+              <span class="charpanel-empty-icon">🖼️</span>
+              <span>No character selected</span>
+            </div>
+
+            <button id="charpanel-prev" class="charpanel-nav charpanel-nav--prev" title="Previous image" aria-label="Previous image">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <button id="charpanel-next" class="charpanel-nav charpanel-nav--next" title="Next image" aria-label="Next image">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+
+            <div id="charpanel-counter" class="charpanel-counter">1 / 1</div>
+          </div>
+
+          <!-- THUMBNAIL STRIP (an "+ Add" tile is appended here by JS) -->
+          <div id="charpanel-thumbs" class="charpanel-thumbs"></div>
+          <input type="file" id="charpanel-add-image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
+
+          <!-- INFO -->
+          <div class="charpanel-info">
+            <div class="charpanel-name-row">
+              <span id="charpanel-name" class="charpanel-name">—</span>
+            </div>
+            <div id="charpanel-meta" class="charpanel-meta"></div>
+
+            <div class="charpanel-desc-row">
+              <p id="charpanel-desc" class="charpanel-desc"></p>
+              <button id="charpanel-desc-edit" class="charpanel-desc-edit hidden" title="Edit description" aria-label="Edit description">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              </button>
+            </div>
+            <button id="charpanel-seemore" class="charpanel-seemore hidden">See more</button>
+
+            <!-- EDIT MODE (hidden unless the pencil is clicked) -->
+            <div id="charpanel-desc-editbox" class="charpanel-desc-editbox hidden">
+              <textarea id="charpanel-desc-textarea" class="charpanel-desc-textarea" maxlength="2000" rows="5" placeholder="Write a short description for this character..."></textarea>
+              <div class="charpanel-desc-editbtns">
+                <button id="charpanel-desc-cancel" class="charpanel-desc-btn charpanel-desc-btn--cancel">Cancel</button>
+                <button id="charpanel-desc-save" class="charpanel-desc-btn charpanel-desc-btn--save">Save</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+
+      <button id="charpanel-collapse-btn" class="panel-collapse-btn panel-collapse-btn--right" title="Minimize" aria-label="Minimize character panel" aria-expanded="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+          <line x1="14.5" y1="4" x2="14.5" y2="20"></line>
+        </svg>
+        <span class="panel-collapse-tooltip">Minimize</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CONFIRM DELETE MODAL -->
+  <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-box">
+      <p id="modal-title" class="modal-title">Delete this chat permanently?</p>
+      <div class="modal-btn-row">
+        <button id="modal-cancel" class="modal-btn modal-btn--cancel">Cancel</button>
+        <button id="modal-confirm" class="modal-btn modal-btn--confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-box settings-modal-box">
+
+      <div class="settings-modal-header">
+        <h2 id="settings-modal-title" class="settings-modal-title">Session Info &amp; Parameters</h2>
+        <button id="settings-close" class="settings-close-btn" title="Close">✕</button>
+      </div>
+
+      <div class="settings-grid">
+        <span class="settings-label">Active Model</span>
+        <span class="settings-value" id="s-model">—</span>
+
+        <span class="settings-label">Connection</span>
+        <span class="settings-value" id="s-connection">—</span>
+
+        <span class="settings-label">Story Mode</span>
+        <span class="settings-value" id="s-mode">—</span>
+
+        <span class="settings-label">Relationship Mode</span>
+        <span class="settings-value" id="s-relmode">—</span>
+
+        <span class="settings-label">Temperature</span>
+        <span class="settings-value" id="s-temp">—</span>
+
+        <span class="settings-label">Top P</span>
+        <span class="settings-value" id="s-topp">—</span>
+
+        <span class="settings-label">Max Tokens</span>
+        <span class="settings-value" id="s-maxtok">—</span>
+
+        <span class="settings-label">Rep. Penalty</span>
+        <span class="settings-value" id="s-rep">—</span>
+
+        <span class="settings-label">Est. Tokens Used</span>
+        <span class="settings-value" id="s-tokens">—</span>
+      </div>
+
+      <!-- SHOW THOUGHTS TOGGLE — mirrors Tkinter CTkSwitch -->
+      <div class="settings-thoughts-row">
+        <span class="settings-thoughts-label">Show AI Internal Thoughts</span>
+        <button id="thoughts-toggle" class="thoughts-toggle-btn" aria-pressed="false" title="Toggle AI thought visibility">
+          <span class="toggle-track">
+            <span class="toggle-thumb"></span>
+          </span>
+          <span class="toggle-label" id="thoughts-label">Off</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- AI CHARACTER WRITER MODAL
+       Separate from the manual JSON builder tool — types a vibe,
+       backend generates + saves + activates a full character card. -->
+  <div id="char-writer-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="char-writer-title">
+    <div class="modal-box char-writer-modal-box">
+
+      <div class="settings-modal-header">
+        <h2 id="char-writer-title" class="settings-modal-title">✨ AI Character Writer</h2>
+        <button id="char-writer-close" class="settings-close-btn" title="Close">✕</button>
+      </div>
+
+      <label class="char-writer-label" for="char-writer-input">
+        What kind of character do you want to create?
+        <span class="char-writer-hint">e.g. "A grumpy, overly-protective bodyguard" — or paste a full detailed brief: backstory, personality quirks, how they talk, anything you want the AI to know.</span>
+      </label>
+      <textarea id="char-writer-input" class="char-writer-textarea" maxlength="4000" rows="6"
+                placeholder="A grumpy, overly-protective bodyguard... (write as much detail as you want)"></textarea>
+      <div id="char-writer-counter" class="char-writer-counter">0 / 4000</div>
+
+      <div id="char-writer-status" class="char-writer-status" aria-live="polite"></div>
+
+      <div class="modal-btn-row">
+        <button id="char-writer-cancel" class="modal-btn modal-btn--cancel">Cancel</button>
+        <button id="char-writer-generate" class="modal-btn modal-btn--confirm modal-btn--generate">
+          <span id="char-writer-spinner" class="char-writer-spinner hidden"></span>
+          <span id="char-writer-btn-label">Generate Character</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ACTIVITY LOG PANEL
+       Floats over the UI. Shows all backend print() output
+       in real time via Server-Sent Events. Draggable. -->
+  <div id="log-panel" class="log-panel hidden" role="complementary" aria-label="Backend activity log">
+    <div id="log-panel-header" class="log-panel-header">
+      <span class="log-panel-title">⚡ Backend Activity</span>
+      <div class="log-panel-controls">
+        <button id="log-clear-btn" class="log-ctrl-btn" title="Clear log">🗑</button>
+        <button id="log-close-btn" class="log-ctrl-btn" title="Close">✕</button>
+      </div>
+    </div>
+    <div id="log-output" class="log-output" aria-live="polite"></div>
+    <div class="log-panel-footer">
+      <span id="log-status" class="log-status">● Connecting...</span>
+    </div>
+  </div>
+
+  <!-- Floating button to open/close the log panel -->
+  <button id="log-toggle-btn" class="log-toggle-btn" title="Toggle activity log">
+    <span>📋</span>
+    <span id="log-badge" class="log-badge hidden">0</span>
+  </button>
+
+  <script src="script.js"></script>
+</body>
+</html>

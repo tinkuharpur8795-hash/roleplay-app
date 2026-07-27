@@ -1,0 +1,69 @@
+--- /mnt/user-data/uploads/app_backend.py	2026-07-25 03:47:15.513876000 +0000
++++ app_backend.py	2026-07-25 03:53:13.688723605 +0000
+@@ -2060,19 +2060,44 @@
+         last_msg_dt = datetime.fromtimestamp(os.path.getmtime(chat_path), tz=IST)
+         time_gap_hint = self._describe_time_gap(last_msg_dt)
+ 
+-        # No more per-kind scripted tone ("send a good morning message" /
+-        # "send a goodnight message"). `kind` still controls WHEN this
+-        # fires (via PROACTIVE_WINDOWS/the schedule), but not WHAT gets
+-        # said — that's left entirely to the character's own personality,
+-        # informed by the real "Current moment" time block and the actual
+-        # time-gap hint below, not a label the code hands it.
+-        synthetic_prompt = (
+-            f"[You're reaching out to {self.USER_NAME} first, completely unprompted — nothing "
+-            f"happened, no one messaged you, you just felt like it. Stay fully in character and "
+-            f"let the real time of day and your own personality decide what that looks like — "
+-            f"sweet, teasing, sarcastic, low-key, annoyed they've been quiet, whatever's actually "
+-            f"true to you right now. Don't default to a generic greeting; say something real.]"
+-        )
++        # Callback layer: check for a due follow-up (e.g. "she had an exam
++        # tomorrow" stored days ago by _maybe_store_expectation) BEFORE
++        # falling back to a generic unprompted ping. This is what actually
++        # sells "infinite memory" for proactive messages — recalling the
++        # specific right thing at the right moment, not just vector-
++        # similarity chatter. Previously this only ran inside live replies
++        # (generate_reply's expectation_hint), never in the proactive path.
++        expectation_hint = ""
++        try:
++            expectation_hint = self.expectations.check_expectation_trigger(
++                cid, chat_id, "", self.current_turn
++            ) or ""
++        except Exception as e:
++            print(f"[⚠️ EXPECTATION] proactive check_trigger failed: {e}")
++
++        if expectation_hint:
++            synthetic_prompt = (
++                f"[You're reaching out to {self.USER_NAME} first, completely unprompted. "
++                f"Something specific has been on your mind — see below. Bring it up "
++                f"naturally, the way you actually would, not as a checklist item. Stay "
++                f"fully in character.]"
++            )
++        else:
++            # No more per-kind scripted tone ("send a good morning message" /
++            # "send a goodnight message"). `kind` still controls WHEN this
++            # fires (via PROACTIVE_WINDOWS/the schedule), but not WHAT gets
++            # said — that's left entirely to the character's own personality,
++            # informed by the real "Current moment" time block and the actual
++            # time-gap hint below, not a label the code hands it.
++            synthetic_prompt = (
++                f"[You're reaching out to {self.USER_NAME} first, completely unprompted — nothing "
++                f"happened, no one messaged you, you just felt like it. Stay fully in character and "
++                f"let the real time of day and your own personality decide what that looks like — "
++                f"sweet, teasing, sarcastic, low-key, annoyed they've been quiet, whatever's actually "
++                f"true to you right now. Don't default to a generic greeting; say something real.]"
++            )
++
++        combined_hint = f"{time_gap_hint}\n{expectation_hint}".strip() if expectation_hint else time_gap_hint
+ 
+         full_prompt_messages = self.build_structured_prompt(
+             character_name=character,
+@@ -2084,7 +2109,7 @@
+             story_summary=summary_data,
+             scene_data_cache=self.ram_scene_cache or {},
+             model_choice=model_choice,
+-            expectation_hint=time_gap_hint,
++            expectation_hint=combined_hint,
+         )
+ 
+         response = self.call_selected_model(full_prompt_messages, gen_settings, model_choice)

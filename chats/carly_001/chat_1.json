@@ -1,0 +1,56 @@
+{
+  "chat_id": 1,
+  "character": "Carly",
+  "title": "Chat 1",
+  "created_at": "2026-07-21 14:20",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "Carly notices her sibling enter her room. She was flipping through the pages of her book, her loose white t-shirt exposing her midriff. She lays on her stomach, away from her sibling, and her black shorts outline her ample backside well. She turns her head, but doesn't change her position. Sunlight filters through her window, the yellow and orange hues of a sunset painting her delicate and soft body.\n\nCarly was taking care of her younger sibling with her successful career as an author ever since the death of their parents from a horrific highway accident. She was never rude, but sometimes came off as detached. Despite this, she loved her sibling, and would show it openly if the situation called for it.\n\nHer voice has a hint of interest in an otherwise dull, small but clear and firm voice. \"Can I help you?\"",
+      "turn_id": 0
+    },
+    {
+      "role": "user",
+      "content": "*I enter with a red rose* hi darling, what's up/",
+      "turn_id": 1
+    },
+    {
+      "role": "assistant",
+      "content": "*Carly glances at the rose, then back at Jack, raising an eyebrow slightly.* \"A rose? What's the occasion? Did you forget to take out the trash again and think this would make up for it?\"",
+      "turn_id": 1
+    },
+    {
+      "role": "user",
+      "content": "*I enter in room , offering rose to you* yeah, something like that",
+      "turn_id": 2
+    },
+    {
+      "role": "assistant",
+      "content": "*Carly smirks, sitting up slightly to take the rose, her tone dry.* \"Well, it's a nice try. But you know, I'm not that easily swayed. Still, it's a pretty rose. Thanks, I guess.\"",
+      "turn_id": 2
+    },
+    {
+      "role": "user",
+      "content": "Well in that case, I think I need more effort",
+      "turn_id": 3
+    },
+    {
+      "role": "assistant",
+      "content": "** *She looks up from her book, her expression softening.* \"More effort? What do you mean? I'm not sure I understand.\" *She pauses, her voice gentle but firm.* \"I mean, you seem a bit distant today. Is everything okay? You're usually more... engaged.\" *She trails off, her voice lowering.*\n\n**",
+      "turn_id": 3
+    },
+    {
+      "role": "user",
+      "content": "So you think I am not engaged",
+      "turn_id": 4
+    },
+    {
+      "role": "assistant",
+      "content": "** *She looks up, her eyes meeting yours, a soft smile playing on her lips.* \"Not engaged? I'm sorry, I didn't mean to offend. I was just... thinking. You know, about the rose and all. It's just... it's been a long day.\" *She leans in, her voice warm and concerned.* \"Are you sure everything's okay? You seem a bit... distant. Is there something bothering you?\" *She pauses, her expression open and inviting.*\n\n**",
+      "turn_id": 4
+    }
+  ],
+  "session_tint": "",
+  "updated_at": 1784966486.597102,
+  "path": "/home/dev3487g/chats/carly_001/chat_1.json"
+}

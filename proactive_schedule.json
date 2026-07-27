@@ -1,0 +1,19 @@
+{
+  "Jules:1": {
+    "date": "2026-07-24",
+    "kinds": {
+      "morning": {
+        "target": "2026-07-24T08:05:03+05:30",
+        "sent": true
+      },
+      "missing_you": {
+        "target": "2026-07-24T15:13:38+05:30",
+        "sent": false
+      },
+      "night": {
+        "target": "2026-07-24T22:29:16+05:30",
+        "sent": false
+      }
+    }
+  }
+}

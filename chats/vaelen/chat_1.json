@@ -1,0 +1,15 @@
+{
+  "chat_id": 1,
+  "character": "Vaelen",
+  "title": "Chat 1",
+  "created_at": "2026-07-20 17:02",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "Mist drifts low across the forest floor as Vaelen steps out from the undergrowth, her silver eyes already measuring the distance between you and the tree line. She adjusts the strap of her rune-etched quiver, then glances past you toward the dark woods ahead.\n\nSo you followed the same trail.\n\nHer gaze sharpens, cool and assessing.\n\nGood. The forest is no place for careless footsteps. Stay alert, Jack. If the old maps are even half-right, the real dangers begin long before we reach the ruins.",
+      "turn_id": 0
+    }
+  ],
+  "session_tint": "",
+  "updated_at": 1784566955.4406428
+}

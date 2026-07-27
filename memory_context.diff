@@ -1,0 +1,482 @@
+--- /mnt/user-data/uploads/memory_context.py	2026-07-25 03:47:27.034035000 +0000
++++ memory_context.py	2026-07-25 03:52:38.259080344 +0000
+@@ -257,10 +257,15 @@
+             
+             index = pc.Index(active_indexes[0])
+ 
+-            # Query Pinecone and strictly filter for THIS character and THIS chat
++            # Query Pinecone and strictly filter for THIS character and THIS chat.
++            # Pull a wider candidate pool than we'll actually show (top_k=8,
++            # display top 3) — pure cosine similarity is what causes
++            # "yesterday" and "last week" to get conflated when two memories
++            # happen to share vocabulary. We rerank in python below using
++            # relevance + recency + importance instead of relevance alone.
+             query_response = index.query(
+                 vector=query_vector,
+-                top_k=2,
++                top_k=8,
+                 include_metadata=True,
+                 filter={
+                     "character": {"$eq": character},
+@@ -268,30 +273,64 @@
+                 }
+             )
+ 
+-            if not query_response.get("matches"):
++            matches = query_response.get("matches") or []
++            if not matches:
+                 return ""
+ 
+-            # 3. Format and Filter the Results
+-            memory_lines = []
+-            
+-            # 🚨 THE MATH BUG FIX: 
+-            # Define a fixed short-term context window (e.g., 12 turns).
+-            # Anything older than 12 turns is safely injected as a flashback.
+-            # (If you want to test retrieval right now on a short chat, change 12 to 0!)
++            # 🚨 THE MATH BUG FIX (kept): anything still inside the live
++            # short-term context window (last ~12 turns) is already visible
++            # to the model in recent_messages, so skip it here to avoid
++            # duplicating it as a "flashback".
+             safe_turn_threshold = max(0, self.backend.current_turn - 12)
++            now_ts = time.time()
+ 
+-            for match in query_response["matches"]:
+-                meta = match.get("metadata", {})
++            scored = []
++            for match in matches:
++                meta = match.get("metadata", {}) or {}
+                 turn_id = meta.get("turn_id", 9999)
+-                
+-                # Only include memories that are OLDER than the current context window
+-                if turn_id < safe_turn_threshold:
+-                    text = meta.get("text", "")
+-                    if text:
+-                        memory_lines.append(f"- {text}")
++                if turn_id >= safe_turn_threshold:
++                    continue
++
++                text = meta.get("text", "")
++                if not text:
++                    continue
++
++                mem_ts = meta.get("timestamp", now_ts)
++                importance = float(meta.get("importance", 0.4))
++                mem_type = meta.get("type", "episode")
++
++                # Exponential recency decay. Reflections (see
++                # generate_weekly_reflection) decay slower — they're meant
++                # to summarize a whole week and stay useful longer than a
++                # single exchange.
++                age_days = max(0.0, (now_ts - mem_ts) / 86400.0)
++                half_life = 30.0 if mem_type == "reflection" else 10.0
++                recency = 0.5 ** (age_days / half_life)
++
++                relevance = match.get("score", 0.0) or 0.0
++                blended = (0.55 * relevance) + (0.25 * recency) + (0.20 * importance)
++                scored.append((blended, mem_ts, text, mem_type))
++
++            if not scored:
++                return ""
++
++            scored.sort(key=lambda x: x[0], reverse=True)
++
++            # 3. Format the top results with an explicit, Python-computed
++            # "when" label on every line — never leave the model to infer
++            # elapsed time from wording alone.
++            memory_lines = []
++            for _, mem_ts, text, mem_type in scored[:3]:
++                label = self._relative_time_label(mem_ts)
++                tag = "REFLECTION (a summary of a past week)" if mem_type == "reflection" else "MEMORY"
++                memory_lines.append(f"- [{label} — {tag}] {text}")
+ 
+             if memory_lines:
+-                return f"\n[FLASHBACK RECALL: Relevant past moments triggered by {self.backend.USER_NAME}'s words:]\n" + "\n".join(memory_lines) + "\n\n"
++                return (f"\n[FLASHBACK RECALL: Relevant past moments triggered by "
++                         f"{self.backend.USER_NAME}'s words. Each line is tagged with "
++                         f"exactly when it happened — treat these as distinct moments "
++                         f"from different times, not one blended memory:]\n"
++                         + "\n".join(memory_lines) + "\n\n")
+ 
+         except httpx.TimeoutException:
+             print("[⚠️ VECTOR RECALL] Mistral embedding timed out. Bypassing recall for this turn.")
+@@ -345,6 +384,105 @@
+         return True
+ 
+ 
++    def _estimate_importance(self, user_text, bot_text):
++        """
++        Cheap, stdlib-only importance heuristic — no extra LLM/API call, so
++        it stays fast and free-tier-friendly. Returns a 0.0-1.0 score that
++        feeds the recency+importance+relevance blend in
++        retrieve_relevant_memory, so emotionally/factually significant
++        moments outlast small talk instead of every memory decaying at the
++        same rate. This is intentionally rough — it doesn't need to be
++        perfect, just directionally right.
++        """
++        combined = f"{user_text} {bot_text}".lower()
++        score = 0.3  # baseline for anything that passed _is_significant_memory
++
++        high_signal = [
++            "love you", "i love", "miss you", "propose", "marry", "breakup",
++            "break up", "broke up", "died", "passed away", "pregnant",
++            "promotion", "got fired", "quit my job", "moving to",
++            "diagnosed", "surgery", "engaged", "i'm scared", "i am scared",
++            "i'm sad", "i am sad", "depressed", "anxiety", "panic attack",
++            "best day", "worst day", "promise me", "never leave", "trust you",
++        ]
++        medium_signal = [
++            "exam", "interview", "deadline", "birthday", "anniversary",
++            "tomorrow", "next week", "wish me luck", "family", "mom", "dad",
++            "sister", "brother", "my friend", "results",
++        ]
++
++        if any(p in combined for p in high_signal):
++            score += 0.45
++        if any(p in combined for p in medium_signal):
++            score += 0.2
++        if "?" in (user_text or ""):
++            score += 0.05
++
++        return max(0.0, min(1.0, score))
++
++
++    def _episode_log_path(self, character, chat_id):
++        """
++        Lightweight local JSONL episode log kept alongside the Pinecone
++        upsert. Purpose: reflection generation needs to read back "every
++        episode from the last 7 days" in chronological order, and Pinecone
++        only supports vector similarity queries (not a plain metadata scan)
++        without an awkward dummy-vector workaround. Writing this cheap local
++        copy means reflections work even if Pinecone is briefly unavailable,
++        and never costs an extra API call to build.
++        """
++        cid = self.backend.CHARACTER_IDS.get(character, character)
++        return os.path.join(self.backend.MEMORY_DIR, f"{cid}_{chat_id}_episodes.jsonl")
++
++
++    def _append_episode_log(self, character, chat_id, text, timestamp, importance, turn_id):
++        try:
++            path = self._episode_log_path(character, chat_id)
++            os.makedirs(os.path.dirname(path), exist_ok=True)
++            with open(path, "a", encoding="utf-8") as f:
++                f.write(json.dumps({
++                    "text": text,
++                    "timestamp": timestamp,
++                    "importance": importance,
++                    "turn_id": turn_id,
++                }, ensure_ascii=False) + "\n")
++        except Exception as e:
++            print(f"[⚠️ EPISODE LOG] append failed: {e}")
++
++
++    def _relative_time_label(self, unix_ts):
++        """
++        Turns a raw timestamp into an unambiguous "when" label, computed in
++        Python — never left for the LLM to infer from context. This is the
++        actual fix for the "bot confuses yesterday with last week" problem:
++        vector similarity can easily pull back two memories about the same
++        topic from different weeks, and unless something tells the model
++        which is which in plain language, it'll blend them into one memory
++        or misattribute recency.
++        """
++        dt = datetime.fromtimestamp(unix_ts, tz=IST)
++        now = datetime.now(IST)
++        delta = now - dt
++        seconds = delta.total_seconds()
++        days = delta.days
++
++        if seconds < 3600:
++            return "earlier today"
++        if dt.date() == now.date():
++            return f"today at {dt.strftime('%I:%M %p')}"
++        if days == 1:
++            return f"yesterday at {dt.strftime('%I:%M %p')}"
++        if days < 7:
++            return f"{days} days ago ({dt.strftime('%A')})"
++        if days < 14:
++            return "about a week ago"
++        if days < 30:
++            return f"about {days // 7} weeks ago"
++        if days < 60:
++            return "about a month ago"
++        return f"about {days // 30} months ago ({dt.strftime('%B %Y')})"
++
++
+     def _background_index_memory(self, character, chat_id, user_text, bot_text, turn_id):
+         """Runs in a background thread to embed and save to Pinecone SAFELY."""
+         try:
+@@ -423,8 +561,16 @@
+ 
+             # Generate a unique ID for the vector
+             vector_id = f"{character}_{chat_id}_turn_{turn_id}"
++            now_ts = time.time()
++            importance = self._estimate_importance(user_text, bot_text_clean)
+ 
+             # 4. Fire the Upsert to the cloud
++            # "type": "episode" marks this as ground-truth raw memory (as
++            # opposed to "reflection" — see generate_weekly_reflection —
++            # which is a higher-level insight generated FROM a batch of
++            # episodes). "importance" feeds the recency+importance+relevance
++            # reranking in retrieve_relevant_memory so this doesn't decay at
++            # the same flat rate as small talk.
+             index.upsert(
+                 vectors=[{
+                     "id": vector_id,
+@@ -434,13 +580,21 @@
+                         "character": character,
+                         "chat_id": str(chat_id),
+                         "turn_id": turn_id,
+-                        "timestamp": time.time(),
+-                        "role": "exchange"
++                        "timestamp": now_ts,
++                        "role": "exchange",
++                        "type": "episode",
++                        "importance": importance,
+                     }
+                 }]
+             )
+ 
+-            print(f"[✅ PINECONE SAVED] Memory embedded and stored for Turn {turn_id}.")
++            # Cheap local copy for reflection generation (see
++            # generate_weekly_reflection) — chronological scan of "everything
++            # from the last N days" isn't something Pinecone's similarity
++            # search does well, so we keep this parallel append-only log.
++            self._append_episode_log(character, chat_id, combined_memory, now_ts, importance, turn_id)
++
++            print(f"[✅ PINECONE SAVED] Memory embedded and stored for Turn {turn_id} (importance={importance:.2f}).")
+ 
+         except httpx.TimeoutException:
+             print(f"[⚠️ PINECONE TIMEOUT] Mistral embedding hung up. Thread killed safely to protect UI.")
+@@ -1048,6 +1202,231 @@
+ 
+         return result
+ 
++    # ══════════════════════════════════════════════════════════════
++    # WEEKLY REFLECTIONS — the third memory layer, alongside raw "episode"
++    # vectors (_background_index_memory) and semantic facts (companion_
++    # facts.py / AdvancedMemoryManager). A reflection is a short, higher-
++    # level insight generated FROM a batch of episodes (e.g. "she's been
++    # anxious about her exam all week"), stored as its own Pinecone vector
++    # with type="reflection". Crucially this does NOT replace or delete the
++    # source episodes — unlike the old time-window-summary approach, nothing
++    # here is lossy-compounding. Reflections just become one more
++    # retrievable memory, weighted to decay slower than a single exchange.
++    # ══════════════════════════════════════════════════════════════
++
++    def _reflection_state_path(self, character, chat_id):
++        cid = self.backend.CHARACTER_IDS.get(character, character)
++        return os.path.join(self.backend.MEMORY_DIR, f"{cid}_{chat_id}_reflection_state.json")
++
++    def _load_reflection_state(self, character, chat_id):
++        path = self._reflection_state_path(character, chat_id)
++        if not os.path.exists(path):
++            return {"last_reflection_ts": 0}
++        try:
++            with open(path, "r", encoding="utf-8") as f:
++                return json.load(f)
++        except Exception:
++            return {"last_reflection_ts": 0}
++
++    def _save_reflection_state(self, character, chat_id, state):
++        try:
++            with open(self._reflection_state_path(character, chat_id), "w", encoding="utf-8") as f:
++                json.dump(state, f, indent=2, ensure_ascii=False)
++        except Exception as e:
++            print(f"[⚠️ REFLECTION STATE] save failed: {e}")
++
++    def generate_weekly_reflection(self, character, chat_id, model_choice=None, min_episodes=6, window_days=7):
++        """
++        Reads the local episode log (see _append_episode_log) for episodes
++        since the last reflection, asks the LLM for a short in-character
++        insight, and stores that insight as a new Pinecone vector
++        (type="reflection"). Meant to be called periodically — see
++        run_due_reflections() for a cron-safe sweep across all chats.
++
++        Returns the reflection text, or None if there wasn't enough new
++        material to reflect on (below min_episodes) or the window hasn't
++        elapsed yet.
++        """
++        state = self._load_reflection_state(character, chat_id)
++        last_ts = state.get("last_reflection_ts", 0)
++        now_ts = time.time()
++
++        if now_ts - last_ts < window_days * 86400:
++            return None  # not due yet
++
++        log_path = self._episode_log_path(character, chat_id)
++        if not os.path.exists(log_path):
++            return None
++
++        episodes = []
++        try:
++            with open(log_path, "r", encoding="utf-8") as f:
++                for line in f:
++                    line = line.strip()
++                    if not line:
++                        continue
++                    try:
++                        ep = json.loads(line)
++                    except Exception:
++                        continue
++                    if ep.get("timestamp", 0) > last_ts:
++                        episodes.append(ep)
++        except Exception as e:
++            print(f"[⚠️ REFLECTION] failed reading episode log: {e}")
++            return None
++
++        if len(episodes) < min_episodes:
++            return None
++
++        episodes.sort(key=lambda e: e.get("timestamp", 0))
++
++        transcript_lines = []
++        for ep in episodes:
++            label = self._relative_time_label(ep["timestamp"])
++            transcript_lines.append(f"[{label}] {ep['text']}")
++        transcript = "\n".join(transcript_lines)
++
++        if not model_choice:
++            model_choice = list(self.backend.MODEL_OPTIONS.keys())[0]
++
++        prompt_messages = [
++            {
++                "role": "system",
++                "content": (
++                    f"You are {character}, privately reflecting on the past week with "
++                    f"{self.backend.USER_NAME}. Write 2-4 sentences, in first person, "
++                    f"capturing what actually mattered emotionally or practically — not a "
++                    f"blow-by-blow recap. Be specific (names, events), not generic. Output "
++                    f"ONLY the reflection text, no preamble."
++                )
++            },
++            {
++                "role": "user",
++                "content": f"Here are this week's moments, oldest first:\n\n{transcript}\n\nYour private reflection:"
++            }
++        ]
++
++        settings = self.backend.CHARACTER_SETTINGS.get(character, {})
++        gen_settings = {
++            "temperature": settings.get("temperature", 0.75),
++            "top_p": settings.get("top_p", 0.85),
++            "max_tokens": 200,
++        }
++
++        try:
++            response = self.backend.call_selected_model(prompt_messages, gen_settings, model_choice)
++            reflection_text = "".join(response) if hasattr(response, "__iter__") and not isinstance(response, str) else (response or "")
++            reflection_text = reflection_text.strip()
++        except Exception as e:
++            print(f"[⚠️ REFLECTION] generation failed: {e}")
++            return None
++
++        if not reflection_text:
++            return None
++
++        # Embed and store the reflection as its own retrievable memory —
++        # same pipeline as _background_index_memory, but type="reflection"
++        # and a high fixed importance so it doesn't get crowded out by
++        # ordinary chatter.
++        try:
++            proxy_url = os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
++            mistral_key = os.getenv("MISTRAL_API_KEY")
++            pc_key = os.getenv("PINECONE_API_KEY")
++            if mistral_key and pc_key:
++                embed_payload = {
++                    "model": os.getenv("MISTRAL_EMBED_MODEL", "mistral-embed"),
++                    "input": [reflection_text]
++                }
++                httpx_kwargs = {"timeout": 15.0}
++                if proxy_url:
++                    httpx_kwargs["proxy"] = proxy_url
++                with httpx.Client(**httpx_kwargs) as client:
++                    resp = client.post(
++                        "https://api.mistral.ai/v1/embeddings",
++                        headers={"Authorization": f"Bearer {mistral_key}"},
++                        json=embed_payload
++                    )
++                    resp.raise_for_status()
++                    vector_data = resp.json()["data"][0]["embedding"]
++
++                pc_kwargs = {"api_key": pc_key}
++                if proxy_url:
++                    pc_kwargs["proxy_url"] = proxy_url
++                pc = Pinecone(**pc_kwargs)
++                active_indexes = pc.list_indexes().names()
++                if active_indexes:
++                    index = pc.Index(active_indexes[0])
++                    index.upsert(vectors=[{
++                        "id": f"{character}_{chat_id}_reflection_{int(now_ts)}",
++                        "values": vector_data,
++                        "metadata": {
++                            "text": reflection_text,
++                            "character": character,
++                            "chat_id": str(chat_id),
++                            "turn_id": episodes[-1].get("turn_id", 0),
++                            "timestamp": now_ts,
++                            "role": "reflection",
++                            "type": "reflection",
++                            "importance": 0.85,
++                        }
++                    }])
++        except Exception as e:
++            print(f"[⚠️ REFLECTION] embed/upsert failed (reflection still saved to state): {e}")
++
++        self._save_reflection_state(character, chat_id, {"last_reflection_ts": now_ts})
++        print(f"[✅ REFLECTION] {character}/{chat_id}: {reflection_text[:80]}...")
++        return reflection_text
++
++    def run_due_reflections(self, max_jobs=3, model_choice=None):
++        """
++        Cron-safe sweep, mirroring run_due_summaries — scans every chat file
++        on disk and runs generate_weekly_reflection() for any chat whose
++        window has elapsed and has enough new episodes. Meant to be hit by
++        the same external scheduler as /cron/summarize, e.g. daily, since
++        generate_weekly_reflection() itself no-ops until 7 days have passed.
++        """
++        result = {"checked": 0, "reflected": [], "skipped": [], "errors": []}
++        chats_root = os.path.join(self.backend.BASE_DIR, "chats")
++        if not os.path.isdir(chats_root):
++            return result
++
++        jobs_run = 0
++        for cid_dir in sorted(os.listdir(chats_root)):
++            dir_path = os.path.join(chats_root, cid_dir)
++            if not os.path.isdir(dir_path):
++                continue
++            for fname in sorted(os.listdir(dir_path)):
++                if jobs_run >= max_jobs:
++                    return result
++                if not (fname.startswith("chat_") and fname.endswith(".json")):
++                    continue
++
++                chat_path = os.path.join(dir_path, fname)
++                result["checked"] += 1
++                try:
++                    with open(chat_path, "r", encoding="utf-8") as f:
++                        chat_data = json.load(f)
++                except Exception as e:
++                    result["errors"].append(f"{fname}: could not read ({e})")
++                    continue
++
++                character = chat_data.get("character")
++                chat_id = str(chat_data.get("chat_id", ""))
++                if not character or not chat_id:
++                    continue
++
++                try:
++                    text = self.generate_weekly_reflection(character, chat_id, model_choice=model_choice)
++                    if text:
++                        result["reflected"].append(f"{character}/{chat_id}")
++                        jobs_run += 1
++                    else:
++                        result["skipped"].append(f"{character}/{chat_id}")
++                except Exception as e:
++                    result["errors"].append(f"{character}/{chat_id}: {e}")
++
++        return result
++
+     # ══════════════════════════════════════════════════════════════
+     # PROACTIVE MESSAGE SCHEDULING — random-time morning/night/missing-you
+     # pings, checked by a frequently-firing external cron (see server.py's

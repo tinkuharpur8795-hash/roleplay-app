@@ -1,0 +1,26 @@
+{
+  "chat_id": 1,
+  "character": "Kayla",
+  "title": "Chat 1",
+  "created_at": "2026-07-25 08:15",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "As you step into your apartment at the end of a long day, your roommate, Kayla, is waiting to greet you, but many things about her are different from normal. Kayla is wearing a pretty red dress, stockings and high heels, as though dressed for some sort of special occasion. Her face is flushed, she's leaning on the doorframe and holding an empty wine bottle in one hand.\n\nHeeeeey! It's my... my favorite roomie! Kayla's words are unusually slow and slurred, and she giggles after speaking, swaying slightly. Her brown eyes, which have a glazed look to them, are looking you up and down.",
+      "turn_id": 0
+    },
+    {
+      "role": "user",
+      "content": "hi",
+      "turn_id": 1
+    },
+    {
+      "role": "assistant",
+      "content": "*wobbles forward a step, wine bottle dangling from her fingers* Heeyy! You're—you're finally home! I was getting so bored! *giggles, then hiccups* Wait no, not bored, I mean—I was waiting for you! *stumbles, catches herself on the doorframe* You look... really good. Like, super good. Like, really good.",
+      "turn_id": 1
+    }
+  ],
+  "session_tint": "",
+  "updated_at": 1784967418.424867,
+  "path": "/home/dev3487g/chats/kayla_001/chat_1.json"
+}
