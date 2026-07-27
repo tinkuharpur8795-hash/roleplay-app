@@ -156,7 +156,7 @@ class RoleplayBackend:
             limits=httpx.Limits(max_keepalive_connections=20, keepalive_expiry=120.0),
             timeout=httpx.Timeout(20.0)
         )
-        PROACTIVE_WINDOWS = {
+        self.PROACTIVE_WINDOWS = {
         # kind: (start_hour, start_minute, end_hour, end_minute) — all in IST
             "morning":     (7, 0, 9, 0),
             "missing_you": (13, 0, 17, 0),
