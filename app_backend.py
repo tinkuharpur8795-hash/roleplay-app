@@ -41,6 +41,7 @@ from genre_config import get_genre_config, get_momentum_text
 from memory_store import CompanionMemoryStore
 from expectation_memory import ExpectationMemory
 from memory_context import MemoryContextEngine
+from db import get_db
 
 try:
     import speech_recognition as sr
@@ -1905,22 +1906,29 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         # Moved to memory_context.py (MemoryContextEngine) — see that file.
         return self.memory_context.run_due_summaries(max_jobs, min_unsummarized)
 
-    def _proactive_schedule_path(self):
-        return os.path.join(self.BASE_DIR, "proactive_schedule.json")
-
     def _load_proactive_schedule(self):
-        path = self._proactive_schedule_path()
-        if not os.path.exists(path):
-            return {}
+        # Migrated from proactive_schedule.json (local file, wiped on every
+        # Render restart) to a single document in the `app_state` Mongo
+        # collection. Same shape as before: a dict keyed by
+        # "character:chat_id" -> {"date": ..., "kinds": {...}}.
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
+            db = get_db()
+            doc = db.app_state.find_one({"_id": "proactive_schedule"})
+            return doc.get("schedule", {}) if doc else {}
+        except Exception as e:
+            print(f"[⚠️ SCHEDULE] Could not load from Mongo: {e}")
             return {}
 
     def _save_proactive_schedule(self, data):
-        with open(self._proactive_schedule_path(), "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        try:
+            db = get_db()
+            db.app_state.update_one(
+                {"_id": "proactive_schedule"},
+                {"$set": {"schedule": data}},
+                upsert=True,
+            )
+        except Exception as e:
+            print(f"[⚠️ SCHEDULE] Could not save to Mongo: {e}")
 
     def _random_time_in_window(self, day, start_h, start_m, end_h, end_m):
         """Random tz-aware (IST) datetime on `day` within [start, end)."""
