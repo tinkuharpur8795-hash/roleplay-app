@@ -32,45 +32,70 @@ class NullVectorMemory:
         pass
 
 
-class AdvancedMemoryManager:
+from db import get_db  # Import your shared DB connection
+class DirectPineconeMemory:
     """
-    Orchestrates the multi-layered memory system:
-    - Long-term facts (JSON)
-    - Scene state (JSON)
-    - Semantic episodic recall (Vector DB)
+    Lightweight wrapper replacing the deleted pinecone_vector_memory.py.
+    Since memory_context.py now handles saving and searching directly,
+    this class only exists to handle the purge_after_turn() requirement
+    when the user clicks 'Undo'.
     """
-    def __init__(self, base_dir):
-        self.base_dir = base_dir
-        self.memory_dir = os.path.join(self.base_dir, "advanced_memory")
-        self.vector_dir = os.path.join(self.memory_dir, "vector_stores")
-        self.facts_dir = os.path.join(self.memory_dir, "long_term_facts")
-        self.scene_dir = os.path.join(self.memory_dir, "scene_states")
-        
-        # Ensure directories exist
-        for d in [self.memory_dir, self.vector_dir, self.facts_dir, self.scene_dir]:
-            os.makedirs(d, exist_ok=True)
+    def __init__(self, character_id, chat_id):
+        self.character_id = character_id
+        self.chat_id = str(chat_id)
+        # Dummy property to prevent len() crashes in app_backend's regenerate_reply
+        self.memories = [] 
+
+    def purge_after_turn(self, turn_id):
+        import os
+        from pinecone import Pinecone
+        try:
+            pc_key = os.getenv("PINECONE_API_KEY")
+            if not pc_key:
+                return
             
+            proxy_url = os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
+            pc_kwargs = {"api_key": pc_key}
+            if proxy_url:
+                pc_kwargs["proxy_url"] = proxy_url
+                
+            pc = Pinecone(**pc_kwargs)
+            active_indexes = pc.list_indexes().names()
+            
+            if active_indexes:
+                index = pc.Index(active_indexes[0])
+                # Delete vectors for this chat strictly greater than the undone turn
+                index.delete(filter={
+                    "character": {"$eq": self.character_id},
+                    "chat_id": {"$eq": self.chat_id},
+                    "turn_id": {"$gt": turn_id}
+                })
+                print(f"[🔄 PINECONE] Purged undone memories after turn {turn_id}.")
+        except Exception as e:
+            print(f"[⚠️ PINECONE] Could not purge undone vectors: {e}")
+
+
+
+class AdvancedMemoryManager:
+    def __init__(self, base_dir):
+        # Base dir kept for compatibility, but we no longer need os.makedirs
+        self.base_dir = base_dir
         self.lock = threading.Lock()
-        
-        # Cache to store initialized NullVectorMemory instances — bounded
-        # LRU (max 20) so it doesn't grow forever as more chats are opened
         self._vector_cache = OrderedDict()
 
+    # We keep these signature methods so nothing upstream breaks, 
+    # but we will bypass them internally.
     def get_fact_file(self, character_id, chat_id):
-        return os.path.join(self.facts_dir, f"{character_id}_{chat_id}_facts.json")
+        return f"{character_id}_{chat_id}_facts"
 
     def get_scene_file(self, character_id, chat_id):
-        return os.path.join(self.scene_dir, f"{character_id}_{chat_id}_scene.json")
+        return f"{character_id}_{chat_id}_scene"
+        
+    def get_summary_file(self, character_id, chat_id):
+        return f"{character_id}_{chat_id}_summary"
 
     def get_vector_memory(self, character_id, chat_id):
-        """Returns the initialized VectorMemory instance for a specific chat from cache.
-
-        Backend is chosen by the VECTOR_MEMORY_BACKEND env var so this can
-        be flipped on/off without a code change:
-            unset / "null"  -> NullVectorMemory (current default, no-op)
-            "qdrant"        -> QdrantVectorMemory (Qdrant Cloud + OpenRouter
-                               embeddings, see qdrant_vector_memory.py)
-        """
+        """Returns the initialized VectorMemory instance for a specific chat from cache."""
         cache_key = f"{character_id}_{chat_id}"
         
         with self.lock:
@@ -79,86 +104,68 @@ class AdvancedMemoryManager:
                 self._vector_cache.move_to_end(cache_key)  # mark as recently used
                 return self._vector_cache[cache_key]
 
-            # If not, initialize it, cache it, and return it
-            prefix = os.path.join(self.vector_dir, cache_key)
-
             backend = os.environ.get("VECTOR_MEMORY_BACKEND", "null").lower()
             if backend == "pinecone":
-                try:
-                    from pinecone_vector_memory import PineconeVectorMemory
-                    vector_instance = PineconeVectorMemory(prefix, bank_id=cache_key)
-                except Exception as e:
-                    print(f"[⚠️ MANAGER] Pinecone vector memory init failed, falling back to null: {e}")
-                    traceback.print_exc()
-                    vector_instance = NullVectorMemory(prefix)
-            elif backend == "qdrant":
-                try:
-                    from qdrant_vector_memory import QdrantVectorMemory
-                    vector_instance = QdrantVectorMemory(prefix, bank_id=cache_key)
-                except Exception as e:
-                    # Never let a Qdrant/Cloud hiccup take down chat itself --
-                    # fall back to the no-op stub for this instance and log it.
-                    print(f"[⚠️ MANAGER] Qdrant vector memory init failed, falling back to null: {e}")
-                    traceback.print_exc()
-                    vector_instance = NullVectorMemory(prefix)
+                # Link to our new native class instead of the deleted file
+                vector_instance = DirectPineconeMemory(character_id, chat_id)
             else:
-                vector_instance = NullVectorMemory(prefix)
+                # Default to the safe, no-op Null Vector Memory
+                vector_instance = NullVectorMemory("dummy_prefix")
 
             self._vector_cache[cache_key] = vector_instance
             if len(self._vector_cache) > 20:
                 self._vector_cache.popitem(last=False)  # evict least-recently-used
 
             return vector_instance
-    def get_summary_file(self, character_id, chat_id):
-        """Resolves the centralized path for the Tiered Summary JSON."""
-        return os.path.join(self.scene_dir, f"{character_id}_{chat_id}_summary.json")
-
+        
     def load_summary(self, character_id, chat_id):
-        """
-        Thread-safe loading of the tiered summary.
-        Returns a fresh dictionary structure if the file doesn't exist.
-        """
-        summary_file = self.get_summary_file(character_id, chat_id)
+        """Thread-safe loading of the tiered summary from MongoDB."""
+        db = get_db()
         with self.lock:
-            if os.path.exists(summary_file):
-                try:
-                    with open(summary_file, 'r', encoding='utf-8') as f:
-                        return json.load(f)
-                except Exception as e:
-                    print(f"[⚠️ MANAGER] Summary Load Error: {e}")
+            doc = db.summaries.find_one({"_id": f"{character_id}_{chat_id}"})
+            if doc and "data" in doc:
+                return doc["data"]
             return {"chronicle": [], "current_arc": ""}
 
     def save_summary(self, character_id, chat_id, summary_data):
-        """Thread-safe saving of the tiered summary dictionary."""
-        summary_file = self.get_summary_file(character_id, chat_id)
+        """Thread-safe saving of the tiered summary to MongoDB."""
+        db = get_db()
         with self.lock:
             try:
-                with open(summary_file, 'w', encoding='utf-8') as f:
-                    json.dump(summary_data, f, indent=2, ensure_ascii=False)
+                db.summaries.update_one(
+                    {"_id": f"{character_id}_{chat_id}"},
+                    {"$set": {
+                        "character": character_id, 
+                        "chat_id": chat_id, 
+                        "data": summary_data
+                    }},
+                    upsert=True
+                )
             except Exception as e:
                 print(f"[⚠️ MANAGER] Summary Save Error: {e}")
-    def initialize_chat_memory(self, character_id, chat_id):
-        """Creates the baseline memory structures for a new chat."""
-        fact_file = self.get_fact_file(character_id, chat_id)
-        scene_file = self.get_scene_file(character_id, chat_id)
 
+    def initialize_chat_memory(self, character_id, chat_id):
+        """Creates the baseline memory structures in MongoDB for a new chat."""
+        db = get_db()
+        doc_id = f"{character_id}_{chat_id}"
+        
         with self.lock:
-            if not os.path.exists(fact_file):
-                baseline_facts = {
-                    "user_profile": {},
-                    "character_discoveries": {},
-                    "milestones": []
-                }
-                with open(fact_file, 'w', encoding='utf-8') as f:
-                    json.dump(baseline_facts, f, indent=2)
-                    
-            if not os.path.exists(scene_file):
-                baseline_scene = {
-                    "current_disposition": "Unknown starting dynamic.",
-                    "structured_scene": {},
-                    "pending_shift": "",
-                    "relationship_tag":   "stranger",
-                    "relationship_stage": "EARLY",
-                }
-                with open(scene_file, 'w', encoding='utf-8') as f:
-                    json.dump(baseline_scene, f, indent=2)
+            # Upsert baseline facts and scene if they don't exist
+            db.chat_states.update_one(
+                {"_id": doc_id},
+                {"$setOnInsert": {
+                    "facts": {
+                        "user_profile": {},
+                        "character_discoveries": {},
+                        "milestones": []
+                    },
+                    "scene": {
+                        "current_disposition": "Unknown starting dynamic.",
+                        "structured_scene": {},
+                        "pending_shift": "",
+                        "relationship_tag": "stranger",
+                        "relationship_stage": "EARLY",
+                    }
+                }},
+                upsert=True
+            )

@@ -372,6 +372,12 @@ class RoleplayBackend:
 
         # Initialization routines
         self.load_characters()
+    def _make_path(self, character, chat_id):
+        return f"{character}::{chat_id}"
+
+    def _parse_path(self, pseudo_path):
+        parts = pseudo_path.split("::")
+        return parts[0], int(parts[1])
 
     def toggle_summary_engine(self, state: bool):
         """Hook this up to your UI toggle button."""
@@ -404,31 +410,36 @@ class RoleplayBackend:
         threading.Thread(target=_warm, daemon=True).start()
 
     def _preload_ram_caches(self, character, chat_id):
-        """Loads SSD data into RAM once when a chat is opened."""
-        state_file = os.path.join(self.MEMORY_DIR, f"{character}_{chat_id}_state.json")
-        fact_file = self.advanced_memory.get_fact_file(character, chat_id)
-        scene_file = self.advanced_memory.get_scene_file(character, chat_id)
+        """Loads MongoDB state, facts, and scene data into RAM once when a chat is opened."""
+        try:
+            db = get_db()
+            doc_id = f"{character}_{chat_id}"
+            doc = db.chat_states.find_one({"_id": doc_id})
 
-        # Load Physical State into RAM
-        self.ram_state_cache = SceneState.load_from_file(state_file)
+            if doc:
+                # Load Scene Data into RAM
+                scene_data = doc.get("scene", {})
+                self.ram_scene_cache = scene_data
+                
+                # Load Physical State into RAM using your existing from_dict method
+                if scene_data:
+                    self.ram_state_cache = SceneState.from_dict(scene_data)
+                else:
+                    self.ram_state_cache = SceneState()
 
-        # Load Facts into RAM
-        self.ram_facts_cache = {}
-        if os.path.exists(fact_file):
-            try:
-                with open(fact_file, 'r', encoding='utf-8') as f:
-                    self.ram_facts_cache = json.load(f)
-            except Exception: pass
+                # Load Facts into RAM
+                self.ram_facts_cache = doc.get("facts", {})
+            else:
+                self.ram_scene_cache = {}
+                self.ram_state_cache = SceneState()
+                self.ram_facts_cache = {}
 
-        # Load Scene Data into RAM
-        self.ram_scene_cache = {}
-        if os.path.exists(scene_file):
-            try:
-                with open(scene_file, 'r', encoding='utf-8') as f:
-                    self.ram_scene_cache = json.load(f)
-            except Exception: pass
-
-        print(f"[⚡ RAM CACHE] Pre-loaded state, facts, and scene for {character}.")
+            print(f"[⚡ RAM CACHE] Pre-loaded state, facts, and scene from DB for {character}.")
+        except Exception as e:
+            print(f"[⚠️ DB ERROR] Failed to preload RAM caches: {e}")
+            self.ram_scene_cache = {}
+            self.ram_state_cache = SceneState()
+            self.ram_facts_cache = {}
 
 
     def load_characters(self):
@@ -905,17 +916,14 @@ Example of a correctly-shaped response (for a totally different idea — invent 
     def get_chat_path(self, character, chat_id):
         return os.path.join(self.get_chats_dir(character), f"chat_{chat_id}.json")
 
+    
+
     def get_sync_snapshot(self, character, chat_id, since=0.0):
         """
         Phase 3 — returns what's changed for one chat since a given unix
         timestamp. Deliberately simple: this app runs one active chat at a
         time (see CURRENT_CHAT), so a full multi-device sync protocol isn't
-        needed yet — a client just needs to know "did anything change since
-        I last checked", which this answers for both the chat file and the
-        Phase 2 companion memory file.
-
-        Returns a dict; never raises — a missing chat/memory file just
-        means chat_changed / memory_changed report False.
+        needed yet.
         """
         result = {
             "chat_changed": False,
@@ -925,25 +933,32 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             "server_time": time.time(),
         }
 
-        chat_path = self.get_chat_path(character, chat_id)
-        if os.path.exists(chat_path):
-            try:
-                with open(chat_path, "r", encoding="utf-8") as f:
-                    chat_data = json.load(f)
+        try:
+            db = get_db()
+            # Ensure chat_id is properly cast for DB queries
+            chat_data = db.chats.find_one({"character": character, "chat_id": int(chat_id)})
+            
+            if chat_data:
                 chat_updated_at = chat_data.get("updated_at", 0)
                 if chat_updated_at > since:
+                    if "_id" in chat_data:
+                        del chat_data["_id"]
+                    chat_data["path"] = self._make_path(character, chat_id)
                     result["chat_changed"] = True
                     result["chat"] = chat_data
-            except Exception as e:
-                print(f"[⚠️ SYNC] Could not read chat file: {e}")
+        except Exception as e:
+            print(f"[⚠️ SYNC] Could not read chat from DB: {e}")
 
         cid = self.CHARACTER_IDS.get(character, character)
-        mem_path = self.companion_memory._get_file_path(cid, str(chat_id))
-        if os.path.exists(mem_path):
+        try:
+            # Companion Memory is preserved. If it has been migrated internally, 
+            # this will still safely pull the dict and check the timestamp.
             mem_record = self.companion_memory.load(cid, str(chat_id))
-            if mem_record.get("updated_at", 0) > since:
+            if mem_record and mem_record.get("updated_at", 0) > since:
                 result["memory_changed"] = True
                 result["memory"] = mem_record
+        except Exception as e:
+            print(f"[⚠️ SYNC] Could not read companion memory: {e}")
 
         return result
 
@@ -964,20 +979,15 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         return self.memory_context._maybe_store_expectation(character, chat_id, user_text, current_turn)
 
     def get_chat_list(self, character):
-        chat_dir = self.get_chats_dir(character)
-        if not os.path.exists(chat_dir): return []
-        files = [f for f in os.listdir(chat_dir) if f.startswith("chat_") and f.endswith(".json")]
-        files.sort(key=lambda x: int(re.search(r'(\d+)', x).group()) if re.search(r'(\d+)', x) else 0)
-
+        db = get_db()
+        cursor = db.chats.find({"character": character}, {"title": 1, "chat_id": 1}).sort("chat_id", 1)
+        
         chat_list = []
-        for f in files:
-            path = os.path.join(chat_dir, f)
-            try:
-                with open(path, "r", encoding="utf-8") as file:
-                    data = json.load(file)
-                    chat_list.append({"title": data.get("title", f), "path": path})
-            except:
-                chat_list.append({"title": f, "path": path})
+        for doc in cursor:
+            chat_list.append({
+                "title": doc.get("title", f"Chat {doc['chat_id']}"), 
+                "path": self._make_path(character, doc["chat_id"])
+            })
         return chat_list
 
     def get_chats_for_character(self, character):
@@ -988,23 +998,16 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         currently open character's chats instead of scanning every
         character on every page load.
         """
-        char_dir = self.get_chats_dir(character)
-        if not os.path.exists(char_dir):
-            return []
-
+        db = get_db()
+        cursor = db.chats.find(
+            {"character": character}, 
+            {"chat_id": 1, "title": 1, "updated_at": 1, "messages": {"$slice": -1}}
+        ).sort("updated_at", -1)
+        
         chats = []
-        for f in os.listdir(char_dir):
-            if not (f.startswith("chat_") and f.endswith(".json")):
-                continue
-            path = os.path.join(char_dir, f)
-            try:
-                with open(path, "r", encoding="utf-8") as file:
-                    data = json.load(file)
-            except Exception:
-                continue
-
-            messages = data.get("messages", [])
-            last_msg = messages[-1] if messages else None
+        for doc in cursor:
+            messages = doc.get("messages", [])
+            last_msg = messages[0] if messages else None
 
             if last_msg is None:
                 preview, is_placeholder = "No messages yet", True
@@ -1013,22 +1016,18 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             else:
                 preview, is_placeholder = "Sent a message", True
 
-            try:
-                last_activity = os.path.getmtime(path)
-            except Exception:
-                last_activity = 0
+            last_activity = doc.get("updated_at", 0)
 
             chats.append({
-                "character":              data.get("character", character),
-                "chat_id":                data.get("chat_id"),
-                "path":                   path,
-                "title":                  data.get("title", f),
+                "character":              character,
+                "chat_id":                doc["chat_id"],
+                "path":                   self._make_path(character, doc["chat_id"]),
+                "title":                  doc.get("title", f"Chat {doc['chat_id']}"),
                 "preview":                preview,
                 "preview_is_placeholder": is_placeholder,
                 "last_activity":          last_activity,
             })
 
-        chats.sort(key=lambda c: c["last_activity"], reverse=True)
         return chats
 
     def get_all_chats(self):
@@ -1040,52 +1039,37 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         rewrites the whole file on every turn, so mtime tracks the true last
         message time even though individual messages aren't timestamped.
         """
-        chats_root = os.path.join(self.BASE_DIR, "chats")
-        if not os.path.exists(chats_root):
-            return []
-
+        db = get_db()
+        cursor = db.chats.find(
+            {}, 
+            {"character": 1, "chat_id": 1, "title": 1, "updated_at": 1, "messages": {"$slice": -1}}
+        ).sort("updated_at", -1)
+        
         all_chats = []
-        for cid in os.listdir(chats_root):
-            char_dir = os.path.join(chats_root, cid)
-            if not os.path.isdir(char_dir):
-                continue
-            for f in os.listdir(char_dir):
-                if not (f.startswith("chat_") and f.endswith(".json")):
-                    continue
-                path = os.path.join(char_dir, f)
-                try:
-                    with open(path, "r", encoding="utf-8") as file:
-                        data = json.load(file)
-                except Exception:
-                    continue
+        for doc in cursor:
+            character = doc.get("character", "Unknown")
+            messages  = doc.get("messages", [])
+            last_msg  = messages[0] if messages else None
 
-                character = data.get("character", "Unknown")
-                messages  = data.get("messages", [])
-                last_msg  = messages[-1] if messages else None
+            if last_msg is None:
+                preview, is_placeholder = "No messages yet", True
+            elif last_msg.get("role") == "assistant":
+                preview, is_placeholder = last_msg.get("content", ""), False
+            else:
+                preview, is_placeholder = "Sent a message", True
 
-                if last_msg is None:
-                    preview, is_placeholder = "No messages yet", True
-                elif last_msg.get("role") == "assistant":
-                    preview, is_placeholder = last_msg.get("content", ""), False
-                else:
-                    preview, is_placeholder = "Sent a message", True
+            last_activity = doc.get("updated_at", 0)
 
-                try:
-                    last_activity = os.path.getmtime(path)
-                except Exception:
-                    last_activity = 0
+            all_chats.append({
+                "character":              character,
+                "chat_id":                doc["chat_id"],
+                "path":                   self._make_path(character, doc["chat_id"]),
+                "title":                  doc.get("title", f"Chat {doc['chat_id']}"),
+                "preview":                preview,
+                "preview_is_placeholder": is_placeholder,
+                "last_activity":          last_activity,
+            })
 
-                all_chats.append({
-                    "character":              character,
-                    "chat_id":                data.get("chat_id"),
-                    "path":                   path,
-                    "title":                  data.get("title", f),
-                    "preview":                preview,
-                    "preview_is_placeholder": is_placeholder,
-                    "last_activity":          last_activity,
-                })
-
-        all_chats.sort(key=lambda c: c["last_activity"], reverse=True)
         return all_chats
 
     def edit_message_in_chat(self, path, index, new_content, expected_role=None):
@@ -1094,14 +1078,16 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         messages array) in a saved chat file. Powers the hover-to-edit
         pencil on any message bubble, past or present.
         """
-        if not os.path.exists(path):
-            return {"status": "error", "message": "Chat file not found."}
-
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            return {"status": "error", "message": f"Could not read chat file: {e}"}
+            character, chat_id = self._parse_path(path)
+        except Exception:
+            return {"status": "error", "message": "Invalid chat path format."}
+
+        db = get_db()
+        data = db.chats.find_one({"character": character, "chat_id": chat_id})
+        
+        if not data:
+            return {"status": "error", "message": "Chat file not found."}
 
         messages = data.get("messages", [])
         if not isinstance(index, int) or index < 0 or index >= len(messages):
@@ -1113,8 +1099,10 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         messages[index]["content"] = new_content
 
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            db.chats.update_one(
+                {"character": character, "chat_id": chat_id},
+                {"$set": {"messages": messages, "updated_at": time.time()}}
+            )
         except Exception as e:
             return {"status": "error", "message": f"Could not save changes: {e}"}
 
@@ -1126,14 +1114,15 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 current_messages[index]["content"] = new_content
 
         return {"status": "success"}
-
     def create_new_chat(self, character):
-        dir_path = self.get_chats_dir(character)
-        existing = [f for f in os.listdir(dir_path) if f.startswith("chat_") and f.endswith(".json")]
-        ids = [int(f[5:-5]) for f in existing if f[5:-5].isdigit()]
-        chat_id = max(ids, default=0) + 1
-        path = os.path.join(dir_path, f"chat_{chat_id}.json")
+        db = get_db()
 
+        # Find the highest chat_id currently used for this character
+        pipeline = [{"$match": {"character": character}}, {"$group": {"_id": None, "max_id": {"$max": "$chat_id"}}}]
+        result = list(db.chats.aggregate(pipeline))
+        chat_id = (result[0]["max_id"] if result else 0) + 1
+        
+        path = self._make_path(character, chat_id)
         first_msg = self.CHARACTER_FIRST_MESSAGES.get(character, "")
         initial_messages = [{"role": "assistant", "content": first_msg, "turn_id": 0}] if first_msg else []
 
@@ -1151,8 +1140,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             "session_tint": session_tint, "updated_at": time.time()
         }
 
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        db.chats.insert_one(data)
 
         self.CURRENT_CHAT = data
         self.CURRENT_CHAT["path"] = path
@@ -1169,37 +1157,46 @@ Example of a correctly-shaped response (for a totally different idea — invent 
 
         cid         = self.CHARACTER_IDS.get(character, "unknown")
         chat_id_str = str(chat_id)
-        state_file  = os.path.join(self.MEMORY_DIR, f"{character}_{chat_id_str}_state.json")
-        initial_state.save_to_file(state_file)
-
+        
+        # Initialize the memory documents via your rewritten manager
         self.advanced_memory.initialize_chat_memory(character, chat_id_str)
 
-        summary_path = self.get_summary_file(character, chat_id_str)
-        if not os.path.exists(summary_path):
-            with open(summary_path, "w", encoding="utf-8") as f:
-                json.dump({"chronicle": [], "current_arc": ""}, f, indent=2, ensure_ascii=False)
-
+        # Apply initial physical state and relationship tags to the DB
         rel_config = self.CHARACTER_SETTINGS.get(character, {}).get("relationship", {})
-        if rel_config:
-            scene_file = self.advanced_memory.get_scene_file(character, chat_id_str)
-            try:
-                with open(scene_file, 'r', encoding='utf-8') as f:
-                    scene_data = json.load(f)
-                scene_data["relationship_tag"]   = rel_config.get("tag", "stranger")
-                scene_data["relationship_stage"] = "EARLY"
-                with open(scene_file, 'w', encoding='utf-8') as f:
-                    json.dump(scene_data, f, indent=2, ensure_ascii=False)
-                print(f"[✅ REL SEED] Tag '{rel_config.get('tag', 'stranger')}' seeded for {character}.")
-            except Exception as e:
-                print(f"[⚠️ REL SEED] Could not seed relationship tag: {e}")
+        rel_tag = rel_config.get("tag", "stranger") if rel_config else "stranger"
+        
+        try:
+            db.chat_states.update_one(
+                {"_id": f"{character}_{chat_id_str}"},
+                {"$set": {
+                    "scene.physical_state": initial_state.physical_state,
+                    "scene.relationship_tag": rel_tag,
+                    "scene.relationship_stage": "EARLY"
+                }},
+                upsert=True
+            )
+            if rel_config:
+                print(f"[✅ REL SEED] Tag '{rel_tag}' seeded for {character}.")
+        except Exception as e:
+            print(f"[⚠️ REL SEED] Could not seed relationship tag: {e}")
 
         self._preload_ram_caches(character, chat_id_str)
 
         return data
+        
     def load_chat(self, path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                chat = json.load(f)
+            character, chat_id = self._parse_path(path)
+            db = get_db()
+            chat = db.chats.find_one({"character": character, "chat_id": chat_id})
+            
+            if not chat:
+                return None
+
+            # Strip the MongoDB specific _id so JSON serialization elsewhere doesn't break
+            if "_id" in chat:
+                del chat["_id"]
+
             chat["path"] = path
             chat.setdefault("messages", [])
 
@@ -1208,11 +1205,10 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             msgs = chat["messages"]
             needs_save = any(m.get("turn_id") is None for m in msgs)
 
-            # Phase 3 — legacy chats created before this phase won't have
-            # updated_at yet. Backfill it (using file mtime as a reasonable
-            # stand-in) so /sync has something to compare against.
+            # Phase 3 — legacy chats won't have updated_at yet. 
+            # Backfill it (using current time as a reasonable stand-in).
             if "updated_at" not in chat:
-                chat["updated_at"] = os.path.getmtime(path) if os.path.exists(path) else time.time()
+                chat["updated_at"] = time.time()
                 needs_save = True
 
             if needs_save:
@@ -1233,8 +1229,11 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                             turn_counter += 1
                             msgs[i]["turn_id"] = turn_counter
                     i += 1
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump(chat, f, indent=2, ensure_ascii=False)
+                
+                db.chats.update_one(
+                    {"character": character, "chat_id": chat_id},
+                    {"$set": {"messages": chat["messages"], "updated_at": chat["updated_at"]}}
+                )
                 print(f"[✅ MIGRATION] Backfilled turn_ids/updated_at for legacy chat: {path}")
             # ─────────────────────────────────────────────────────────────────
 
@@ -1248,20 +1247,41 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         except Exception as e:
             print("LOAD ERROR:", e)
             return None
-
+        
     def save_current_chat(self):
         if self.CURRENT_CHAT.get("path") and self.CURRENT_CHAT.get("messages") is not None:
             # Phase 3 — stamp every write so /sync can tell a client whether
             # this chat has changed since their last poll (`since=<ts>`).
             self.CURRENT_CHAT["updated_at"] = time.time()
-            with open(self.CURRENT_CHAT["path"], "w", encoding="utf-8") as f:
-                json.dump(self.CURRENT_CHAT, f, indent=2, ensure_ascii=False)
+            
+            try:
+                db = get_db()
+                
+                # Create a copy without "_id" or "path" for the DB to avoid schema pollution
+                data_to_save = dict(self.CURRENT_CHAT)
+                data_to_save.pop("_id", None)
+                data_to_save.pop("path", None)
+
+                db.chats.update_one(
+                    {"character": data_to_save["character"], "chat_id": data_to_save["chat_id"]},
+                    {"$set": data_to_save},
+                    upsert=True
+                )
+            except Exception as e:
+                print(f"[⚠️ DB ERROR] Could not save current chat: {e}")
 
     def delete_chat(self, path):
-        if os.path.exists(path):
-            os.remove(path)
-            if self.CURRENT_CHAT.get("path") == path:
-                self.CURRENT_CHAT = {"character": None, "chat_id": None, "path": None, "messages": []}
+        try:
+            character, chat_id = self._parse_path(path)
+            db = get_db()
+            
+            result = db.chats.delete_one({"character": character, "chat_id": chat_id})
+            
+            if result.deleted_count > 0:
+                if self.CURRENT_CHAT.get("path") == path:
+                    self.CURRENT_CHAT = {"character": None, "chat_id": None, "path": None, "messages": []}
+        except Exception as e:
+            print(f"[⚠️ DB ERROR] Error deleting chat: {e}")
     @property
     def current_turn(self):
         """
@@ -1978,17 +1998,17 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         """
         Called on every /cron/proactive_check hit. Rolls (or fetches) today's
         random target times, and generates+marks-sent any kind whose target
-        has passed and hasn't fired yet today. Returns a list of
-        (kind, message_text) tuples for the caller to actually deliver
-        (e.g. via Telegram) — this function does not send anything itself,
-        so a delivery failure doesn't get silently swallowed here.
+        has passed and hasn't fired yet today.
         """
         key = f"{character}:{chat_id}"
         entry = self._get_or_create_today_schedule(character, chat_id)
         now = datetime.now(IST)
         due = []
         changed = False
-        chat_path = self.get_chat_path(character, chat_id)
+        
+        # Pull only the updated_at field from the DB to keep the cron lightweight
+        db = get_db()
+        chat_doc = db.chats.find_one({"character": character, "chat_id": int(chat_id)}, {"updated_at": 1})
 
         for kind, info in entry["kinds"].items():
             if info["sent"]:
@@ -1997,25 +2017,13 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             if now < target_dt:
                 continue  # not due yet
             if now > self._window_end_dt(now.date(), kind):
-                # Missed the window entirely (e.g. cron didn't run for a
-                # while) — skip silently rather than firing a late/stale
-                # message; it'll get a fresh target tomorrow.
                 info["sent"] = True
                 changed = True
                 continue
 
-            # Don't interrupt (or race with) an active conversation. Both
-            # generate_proactive_message() and a live chat turn read the
-            # whole chat file and write the whole thing back with no file
-            # locking — if the file was touched moments ago, you're
-            # probably mid-conversation right now, and firing here risks
-            # either an out-of-nowhere "missing you" mid-chat, or a lost
-            # write if the two saves land close enough together. Leave
-            # "sent" False so it's retried on the next cron hit instead —
-            # still due, just not yet, as long as we're inside the window.
-            if os.path.exists(chat_path):
-                minutes_quiet = (now - datetime.fromtimestamp(
-                    os.path.getmtime(chat_path), tz=IST)).total_seconds() / 60
+            if chat_doc and "updated_at" in chat_doc:
+                last_active = datetime.fromtimestamp(chat_doc["updated_at"], tz=IST)
+                minutes_quiet = (now - last_active).total_seconds() / 60
                 if minutes_quiet < self.PROACTIVE_MIN_QUIET_MINUTES:
                     continue
 
@@ -2023,27 +2031,19 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             due.append((kind, text))
             info["sent"] = True
             changed = True
-
+ 
         if changed:
             schedule = self._load_proactive_schedule()
             schedule[key] = entry
             self._save_proactive_schedule(schedule)
 
-        return due
-
+        return due 
+    
     def generate_proactive_message(self, character, chat_id, kind, model_choice=None):
         """
         Synchronous, non-streaming companion message for external triggers
-        (proactive scheduling). `kind` (morning/night/missing_you) only
-        identifies which PROACTIVE_WINDOWS slot fired this — for logging and
-        the caller's response payload — it no longer dictates the message's
-        tone or content; see the generic synthetic_prompt below for why.
-        Reads the chat file directly off disk — same approach as
-        run_due_summaries — since this can fire with no live session open,
-        so self.CURRENT_CHAT can't be assumed. Reuses the existing
-        build_structured_prompt / call_selected_model pipeline so the
-        message shares the same voice, chronicle, and memory as a normal
-        reply instead of a separate ad hoc prompt.
+        (proactive scheduling). Reads the chat directly from the database 
+        since this can fire with no live session open.
         """
         if not model_choice:
             model_choice = list(self.MODEL_OPTIONS.keys())[0]
@@ -2052,13 +2052,17 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         if not char_prompt:
             raise ValueError(f"Unknown character: {character}")
 
-        chat_path = os.path.join(self.get_chats_dir(character), f"chat_{chat_id}.json")
-        if not os.path.exists(chat_path):
-            raise ValueError(f"No chat file found for {character}/{chat_id}")
+        db = get_db()
+        chat_data = db.chats.find_one({"character": character, "chat_id": int(chat_id)})
+        
+        if not chat_data:
+            raise ValueError(f"No chat record found in DB for {character}/{chat_id}")
 
-        with open(chat_path, "r", encoding="utf-8") as f:
-            chat_data = json.load(f)
         recent_history = chat_data.get("messages", [])
+        
+        last_updated_ts = chat_data.get("updated_at", time.time())
+        last_msg_dt = datetime.fromtimestamp(last_updated_ts, tz=IST)
+        time_gap_hint = self._describe_time_gap(last_msg_dt)
 
         cid = self.CHARACTER_IDS.get(character, "unknown")
         summary_data = self.advanced_memory.load_summary(cid, chat_id)
@@ -2072,20 +2076,6 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             "max_tokens": char_settings.get("max_tokens", 300),
         }
 
-        last_msg_dt = datetime.fromtimestamp(os.path.getmtime(chat_path), tz=IST)
-        time_gap_hint = self._describe_time_gap(last_msg_dt)
-
-        # Callback layer: check for a due follow-up (e.g. "she had an exam
-        # tomorrow" stored days ago by _maybe_store_expectation) BEFORE
-        # falling back to a generic unprompted ping. This is what actually
-        # sells "infinite memory" for proactive messages — recalling the
-        # specific right thing at the right moment, not just vector-
-        # similarity chatter. Uses get_due_followups (wall-clock due_at),
-        # NOT check_expectation_trigger — that method scores off keyword
-        # overlap with a user message, and there's no live user message
-        # here, so it would only ever fall back to turn-count impatience,
-        # which doesn't move while the user's been away (exactly when a
-        # real due date passes).
         expectation_hint = ""
         try:
             due = self.expectations.get_due_followups(cid, chat_id, limit=1)
@@ -2102,12 +2092,6 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 f"fully in character.]"
             )
         else:
-            # No more per-kind scripted tone ("send a good morning message" /
-            # "send a goodnight message"). `kind` still controls WHEN this
-            # fires (via PROACTIVE_WINDOWS/the schedule), but not WHAT gets
-            # said — that's left entirely to the character's own personality,
-            # informed by the real "Current moment" time block and the actual
-            # time-gap hint below, not a label the code hands it.
             synthetic_prompt = (
                 f"[You're reaching out to {self.USER_NAME} first, completely unprompted — nothing "
                 f"happened, no one messaged you, you just felt like it. Stay fully in character and "
@@ -2146,12 +2130,19 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             raise RuntimeError(full_reply.strip())
 
         new_turn_id = (recent_history[-1].get("turn_id", 0) + 1) if recent_history else 1
+        
+        # Append the new message and stamp the time
         chat_data["messages"].append({"role": "assistant", "content": full_reply, "turn_id": new_turn_id})
-        with open(chat_path, "w", encoding="utf-8") as f:
-            json.dump(chat_data, f, indent=2, ensure_ascii=False)
+        chat_data["updated_at"] = time.time()
+        
+        # Strip _id to avoid schema issues, then update DB
+        chat_data.pop("_id", None)
+        db.chats.update_one(
+            {"character": character, "chat_id": int(chat_id)},
+            {"$set": chat_data}
+        )
 
         return full_reply
-
     def generate_morning_message(self, character, chat_id, model_choice=None):
         """Kept for backward compatibility — thin wrapper around the
         generalized generate_proactive_message(). Prefer calling that
@@ -2184,15 +2175,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         """
         Non-streaming counterpart to generate_reply(), for triggers that
         aren't the web UI's SSE connection (Telegram webhook, in this case).
-        Same disk-based chat loading as generate_morning_message — assumes
-        no live self.CURRENT_CHAT session, reads/writes the chat file
-        directly. Appends BOTH the user's message and the reply, so the
-        chat stays in sync with what the web app would show.
-
-        Tries model_choice first; if the provider call fails (returns an
-        "Error: ..." string rather than raising), falls back to a second
-        model once before giving up. Prevents a single flaky provider from
-        producing a dead conversation with no Undo button to fix it.
+        Reads/writes the chat directly from MongoDB.
         """
         FALLBACK_MODEL = "Groq LLaMA 3.3 70B  (Brain)"
 
@@ -2203,15 +2186,16 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         if not char_prompt:
             raise ValueError(f"Unknown character: {character}")
 
-        chat_path = self.get_chat_path(character, chat_id)
-        if not os.path.exists(chat_path):
-            raise ValueError(f"No chat file found for {character}/{chat_id}")
+        db = get_db()
+        chat_data = db.chats.find_one({"character": character, "chat_id": int(chat_id)})
+        
+        if not chat_data:
+            raise ValueError(f"No chat record found in DB for {character}/{chat_id}")
 
-        last_msg_dt = datetime.fromtimestamp(os.path.getmtime(chat_path), tz=IST)
+        last_updated_ts = chat_data.get("updated_at", time.time())
+        last_msg_dt = datetime.fromtimestamp(last_updated_ts, tz=IST)
         time_gap_hint = self._describe_time_gap(last_msg_dt)
 
-        with open(chat_path, "r", encoding="utf-8") as f:
-            chat_data = json.load(f)
         recent_history = chat_data.get("messages", [])
 
         cid = self.CHARACTER_IDS.get(character, "unknown")
@@ -2226,17 +2210,15 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             "max_tokens": char_settings.get("max_tokens", 650),
         }
 
-        # 1. Fetch memory from Pinecone using your PA-safe proxy function
         recalled_memory = ""
         if getattr(self, 'enable_vector_recall', False):
             recalled_memory = self.retrieve_relevant_memory(recent_history, user_text, character, chat_id)
 
-        # 2. Pass it into the prompt builder
         full_prompt_messages = self.build_structured_prompt(
             character_name=character,
             character_prompt=char_prompt,
             chat_id=chat_id,
-            recalled_memory=recalled_memory,  # <--- NOW IT USES THE ACTUAL MEMORY
+            recalled_memory=recalled_memory, 
             recent_messages=recent_history,
             user_message=user_text,
             story_summary=summary_data,
@@ -2274,12 +2256,16 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         last_turn_id = recent_history[-1].get("turn_id", 0) if recent_history else 0
         chat_data["messages"].append({"role": "user", "content": user_text, "turn_id": last_turn_id + 1})
         chat_data["messages"].append({"role": "assistant", "content": full_reply, "turn_id": last_turn_id + 2})
+        chat_data["updated_at"] = time.time()
 
-        with open(chat_path, "w", encoding="utf-8") as f:
-            json.dump(chat_data, f, indent=2, ensure_ascii=False)
+        # Update MongoDB
+        chat_data.pop("_id", None)
+        db.chats.update_one(
+            {"character": character, "chat_id": int(chat_id)},
+            {"$set": chat_data}
+        )
 
         return full_reply
-
     def update_story_summary(self, character, chat_id, full_history, turn_id, current_arc, model_choice):
         # Moved to memory_context.py (MemoryContextEngine) — see that file.
         return self.memory_context.update_story_summary(character, chat_id, full_history, turn_id, current_arc, model_choice)
@@ -2766,11 +2752,6 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         return cleaned
     def undo(self):
         msgs = self.CURRENT_CHAT.get("messages", [])
-        # Step 1: Validate WITHOUT mutating — only commit to popping once we
-        # know a valid (optional assistant, then user) pair actually exists.
-        # Mutating msgs in place and then bailing out on failure used to
-        # silently corrupt CURRENT_CHAT["messages"] (it's the same list
-        # object, not a copy), since the popped item was never restored.
         if not msgs: return None
 
         idx = len(msgs) - 1
@@ -2780,23 +2761,19 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         if idx < 0 or msgs[idx]["role"] != "user":
             return None  # nothing safe to undo — leave history untouched
 
-        # Step 2: Now it's safe to actually pop.
         if msgs[-1]["role"] == "assistant": msgs.pop()
         prev = msgs.pop()
         self.save_current_chat()
 
-        # Step 2: Initialize variables for state recovery
         character = self.CURRENT_CHAT.get("character")
         chat_id = self.CURRENT_CHAT.get("chat_id")
         cid = self.CHARACTER_IDS.get(character, "unknown")
 
-        # Step 3: Check for local checkpoints
         summary_data = self.advanced_memory.load_summary(cid, chat_id)
         checkpoints = summary_data.get("checkpoints", {})
         checkpoint_restored = False
 
         if checkpoints:
-            # Find the most recent checkpoint that matches our new current turn
             valid_turns = [int(t) for t in checkpoints.keys() if int(t) <= self.current_turn]
 
             if valid_turns:
@@ -2808,12 +2785,17 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 summary_data["chronicle"] = list(best_checkpoint["chronicle"])
                 summary_data["last_summarized_index"] = best_checkpoint["last_summarized_index"]
 
-                # Restore Physical State
+                # Restore Physical State to MongoDB and RAM
                 if "physical_state" in best_checkpoint:
-                    state_file = os.path.join(self.MEMORY_DIR, f"{character}_{chat_id}_state.json")
+                    db = get_db()
+                    db.chat_states.update_one(
+                        {"_id": f"{character}_{chat_id}"},
+                        {"$set": {"scene": best_checkpoint["physical_state"]}},
+                        upsert=True
+                    )
+                    
                     restored_state = SceneState.from_dict(best_checkpoint["physical_state"])
-                    restored_state.save_to_file(state_file)
-                    self.ram_state_cache = restored_state  # keep RAM in sync with restored disk state
+                    self.ram_state_cache = restored_state  # keep RAM in sync with restored DB state
 
                 # Prune future checkpoints that we just erased
                 summary_data["checkpoints"] = {t: c for t, c in checkpoints.items() if int(t) <= self.current_turn}
@@ -2822,8 +2804,9 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 checkpoint_restored = True
                 print(f"[✅ UNDO] State restored locally from Turn {best_turn}. API call skipped.")
 
-
         return prev.get("content", "")
+
+        
     def regenerate_reply(self, character, model_choice, on_chunk, on_complete, on_error):
         # Step 1: Use the robust undo() method to revert the timeline.
         # This safely pops the messages AND restores the tiered summary and physical SceneState.
@@ -2888,11 +2871,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                     last_user_msg = m["content"]
                     break
 
-
-            # line 2829 — Telegram sync path, replace the hardcoded empty string
             recalled_memory = self.retrieve_relevant_memory(msgs[:-1], last_user_msg, character, chat_id)
-
-
 
             cid = self.CHARACTER_IDS.get(character, "unknown")
             summary_data = self.advanced_memory.load_summary(cid, chat_id)
@@ -2901,15 +2880,18 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 character, char_prompt, chat_id, recalled_memory, msgs[:-1], last_user_msg,
                 story_summary=summary_data
             )
+            
             # Inject the incomplete last message and force the model to continue it
             full_prompt_messages.append({"role": "assistant", "content": msgs[-1]["content"]})
             _cont_genre = self.CHARACTER_GENRES.get(character, "romance")
             _cont_cue   = get_genre_config(_cont_genre)["continuation_cue"]
             full_prompt_messages.append({"role": "user", "content": _cont_cue})
+            
             response_generator = self.call_selected_model(full_prompt_messages, gen_settings, model_choice)
             if not response_generator:
                 on_error("No reply received.")
                 return
+                
             added_text = ""
             for chunk in response_generator:
                 if chunk:
@@ -2928,6 +2910,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             # Append seamlessly to the existing history
             self.CURRENT_CHAT["messages"][-1]["content"] += " " + clean_added
             self.save_current_chat()
+            
             on_complete(clean_added)
         except Exception as e:
             on_error(str(e))

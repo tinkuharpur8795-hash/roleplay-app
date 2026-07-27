@@ -58,45 +58,56 @@ class CompanionMemoryStore:
         }
 
     def load(self, character_id, chat_id):
-        """Thread-safe load. Returns a fresh default record if none exists yet."""
-        path = self._get_file_path(character_id, chat_id)
+        """Thread-safe load from MongoDB. Returns a fresh default record if none exists yet."""
         with self.lock:
-            if os.path.exists(path):
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
+            try:
+                from db import get_db
+                db = get_db()
+                doc = db.companion_state.find_one({"_id": f"{character_id}_{chat_id}"})
+                
+                if doc and "data" in doc:
+                    data = doc["data"]
                     # Backfill any keys missing from an older/partial record
                     # so callers never have to defensively .get() every field.
                     default = self._default_record()
                     for key, val in default.items():
                         data.setdefault(key, val)
                     return data
-                except Exception as e:
-                    print(f"[⚠️ COMPANION MEMORY] Load error: {e}")
+            except Exception as e:
+                print(f"[⚠️ COMPANION MEMORY DB] Load error: {e}")
+                
             return self._default_record()
-
+        
     def save(self, character_id, chat_id, record):
-        """Thread-safe save. Stamps updated_at on every write."""
-        path = self._get_file_path(character_id, chat_id)
+        """Thread-safe save to MongoDB. Stamps updated_at on every write."""
         record["updated_at"] = time.time()
         record["schema_version"] = self.SCHEMA_VERSION
         with self.lock:
             try:
-                with open(path, 'w', encoding='utf-8') as f:
-                    json.dump(record, f, indent=2, ensure_ascii=False)
+                from db import get_db
+                db = get_db()
+                db.companion_state.update_one(
+                    {"_id": f"{character_id}_{chat_id}"},
+                    {"$set": {
+                        "character": character_id,
+                        "chat_id": chat_id,
+                        "data": record
+                    }},
+                    upsert=True
+                )
             except Exception as e:
-                print(f"[⚠️ COMPANION MEMORY] Save error: {e}")
+                print(f"[⚠️ COMPANION MEMORY DB] Save error: {e}")
 
     def delete(self, character_id, chat_id):
-        """Removes this chat's consolidated memory file, if present. Returns True if a file was removed."""
-        path = self._get_file_path(character_id, chat_id)
+        """Removes this chat's consolidated memory document, if present. Returns True if removed."""
         with self.lock:
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                    return True
-                except Exception as e:
-                    print(f"[⚠️ COMPANION MEMORY] Delete error: {e}")
+            try:
+                from db import get_db
+                db = get_db()
+                result = db.companion_state.delete_one({"_id": f"{character_id}_{chat_id}"})
+                return result.deleted_count > 0
+            except Exception as e:
+                print(f"[⚠️ COMPANION MEMORY DB] Delete error: {e}")
         return False
 
     def migrate_from_legacy_files(self, character_id, chat_id, fact_file=None, expectations_file=None):

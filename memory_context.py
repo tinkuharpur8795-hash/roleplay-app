@@ -36,6 +36,7 @@ from expectation_memory import infer_due_seconds
 from emotional_memory import EmotionalBeatBank
 import httpx
 from pinecone import Pinecone
+from db import get_db
 _FUTURE_EVENT_PATTERNS = [
     re.compile(r"\bi(?:'m| am) (?:going|planning) to (?:the |a |an )?([a-z][a-z' ]{2,40}?)\s+(?:tomorrow|tonight|later|this (?:week|weekend)|next \w+)", re.IGNORECASE),
     re.compile(r"\bi(?:'ve| have) got (?:an?|my) ([a-z][a-z' ]{2,40}?)\s+(?:tomorrow|tonight|later|this (?:week|weekend)|next \w+)", re.IGNORECASE),
@@ -65,73 +66,71 @@ class MemoryContextEngine:
 
 
     def delete_chat_memory(self, character, chat_id):
-        """
-        Phase 2 — single entry point for wiping every memory artifact tied to
-        one chat. Replaces the 16-path manual list that used to live inline
-        in server.py's /delete_chat route (duplicated across both the
-        character *name* and the character *id* because it was never clear
-        which one a given file used).
-
-        Returns {"deleted": [...], "errors": [...]} — same shape the old
-        inline code returned, so the route doesn't need to change its
-        response handling, only how it gets the list.
-        """
+        """Wipes MongoDB artifacts, local caches, and vector data for one chat."""
         cid = self.backend.CHARACTER_IDS.get(character, character)
         cache_key = f"{character}_{chat_id}"
         cid_cache_key = f"{cid}_{chat_id}"
+        deleted, errors = [], []
 
+        # 1. Clear In-Memory Vector & Emotional Beat Caches
         for _key in (cache_key, cid_cache_key):
             if _key in self.backend.advanced_memory._vector_cache:
                 del self.backend.advanced_memory._vector_cache[_key]
+                
+        beat_key = (character, str(chat_id))
+        if hasattr(self.backend, "_beat_bank_cache") and beat_key in self.backend._beat_bank_cache:
+            del self.backend._beat_bank_cache[beat_key]
 
+        # 2. Delete Local Vector Stub Files (if any legacy files exist)
         vec_dir = getattr(self.backend.advanced_memory, 'vector_dir', os.path.join(self.backend.BASE_DIR, 'memory'))
-
-        files_to_remove = [
-            # Legacy top-level paths
-            self.get_memory_file(character, chat_id),
-            os.path.join(self.backend.MEMORY_DIR, f"{character}_{chat_id}_state.json"),
-            os.path.join(self.backend.MEMORY_DIR, f"{character}_{chat_id}_facts.json"),
-            os.path.join(self.backend.SUMMARY_DIR, f"{character}_chat_{chat_id}_summary.txt"),
-
-            # AdvancedMemoryManager paths — both id and name variants, since
-            # older data may have been written under either
-            self.backend.advanced_memory.get_fact_file(cid, chat_id),
-            self.backend.advanced_memory.get_scene_file(cid, chat_id),
-            self.backend.advanced_memory.get_summary_file(cid, chat_id),
-            self.backend.advanced_memory.get_summary_file(cid, chat_id) + ".bak",
-            self.backend.advanced_memory.get_fact_file(character, chat_id),
-            self.backend.advanced_memory.get_scene_file(character, chat_id),
-            self.backend.advanced_memory.get_summary_file(character, chat_id),
-            self.backend.advanced_memory.get_summary_file(character, chat_id) + ".bak",
-
-            # Phase 2 consolidated companion file (facts/relationship/reminders)
-            self.backend.companion_memory._get_file_path(cid, chat_id),
-            self.backend.companion_memory._get_file_path(character, chat_id),
-
-            # Old orphaned expectations file (pre-Phase-2) — kept here so any
-            # leftover files from earlier testing still get cleaned up
-            os.path.join(self.backend.BASE_DIR, "advanced_memory", "expectations", f"{cid}_{chat_id}_expectations.json"),
-            os.path.join(self.backend.BASE_DIR, "advanced_memory", "expectations", f"{character}_{chat_id}_expectations.json"),
-
-            # Vector database paths
+        local_files = [
             os.path.join(vec_dir, f"{cid_cache_key}.index"),
             os.path.join(vec_dir, f"{cid_cache_key}_data.json"),
             os.path.join(vec_dir, f"{cache_key}.index"),
             os.path.join(vec_dir, f"{cache_key}_data.json"),
         ]
+        for fpath in local_files:
+            if os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                    deleted.append(os.path.basename(fpath))
+                except Exception as e:
+                    errors.append(f"{os.path.basename(fpath)}: {e}")
 
-        deleted, errors = [], []
-        for file_path in files_to_remove:
-            if not file_path or not os.path.exists(file_path):
-                continue
-            try:
-                os.remove(file_path)
-                deleted.append(os.path.basename(file_path))
-            except Exception as e:
-                errors.append(f"{os.path.basename(file_path)}: {e}")
+        # 3. Purge from Pinecone Cloud (Proxy-Safe for PythonAnywhere)
+        try:
+            pc_key = os.getenv("PINECONE_API_KEY")
+            if pc_key:
+                proxy_url = os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
+                pc_kwargs = {"api_key": pc_key}
+                if proxy_url:
+                    pc_kwargs["proxy_url"] = proxy_url
+                
+                pc = Pinecone(**pc_kwargs)
+                active_indexes = pc.list_indexes().names()
+                if active_indexes:
+                    index = pc.Index(active_indexes[0])
+                    # Delete using the exact metadata structure used during upserts
+                    index.delete(filter={
+                        "character": {"$eq": character},
+                        "chat_id": {"$eq": str(chat_id)}
+                    })
+                    deleted.append("Pinecone cloud vectors purged")
+        except Exception as e:
+            errors.append(f"Pinecone deletion error: {e}")
+
+        # 4. Wipe MongoDB Artifacts
+        try:
+            db = get_db()
+            db.summaries.delete_one({"_id": f"{cid}_{chat_id}"})
+            db.chat_states.delete_one({"_id": f"{character}_{chat_id}"})
+            db.episodes.delete_many({"character": character, "chat_id": str(chat_id)})
+            db.reflections.delete_one({"_id": f"{character}_{chat_id}"})
+            deleted.append(f"MongoDB memory cleared for {character} (Chat {chat_id})")
+        except Exception as e:
+            errors.append(f"MongoDB deletion error: {e}")
 
         return {"deleted": deleted, "errors": errors}
-
 
     def _maybe_store_expectation(self, character, chat_id, user_text, current_turn):
         """
@@ -445,19 +444,19 @@ class MemoryContextEngine:
 
 
     def _append_episode_log(self, character, chat_id, text, timestamp, importance, turn_id):
+        """Saves episodic logs to MongoDB instead of .jsonl files."""
         try:
-            path = self._episode_log_path(character, chat_id)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({
-                    "text": text,
-                    "timestamp": timestamp,
-                    "importance": importance,
-                    "turn_id": turn_id,
-                }, ensure_ascii=False) + "\n")
+            db = get_db()
+            db.episodes.insert_one({
+                "character": character,
+                "chat_id": str(chat_id),
+                "text": text,
+                "timestamp": timestamp,
+                "importance": importance,
+                "turn_id": turn_id
+            })
         except Exception as e:
             print(f"[⚠️ EPISODE LOG] append failed: {e}")
-
 
     def _relative_time_label(self, unix_ts):
         """
@@ -627,15 +626,20 @@ class MemoryContextEngine:
         Builds the scene state string from the RAM-cached SceneState.
         Cleaned up to remove conflicting ALL CAPS override directives.
         """
-        scene_file = self.backend.advanced_memory.get_scene_file(character_name, chat_id)
-        state_file = os.path.join(self.backend.MEMORY_DIR, f"{character_name}_{chat_id}_state.json")
         _scene_data = self.backend.ram_scene_cache
 
         try:
-            current_scene_state = (
-                self.backend.ram_state_cache if self.backend.ram_state_cache
-                else SceneState.load_from_file(state_file)
-            )
+            # If RAM cache is missing, load directly from MongoDB
+            if self.backend.ram_state_cache:
+                current_scene_state = self.backend.ram_state_cache
+            else:
+                from db import get_db
+                db = get_db()
+                doc = db.chat_states.find_one({"_id": f"{character_name}_{chat_id}"})
+                if doc and "scene" in doc:
+                    current_scene_state = SceneState.from_dict(doc["scene"])
+                else:
+                    current_scene_state = SceneState()
 
             bridge_text = ""
             if hasattr(current_scene_state, 'recent_action_bridge') and current_scene_state.recent_action_bridge:
@@ -659,17 +663,22 @@ class MemoryContextEngine:
 
             if pending_shift:
                 scene_data["pending_shift"] = ""
-                with self.backend.advanced_memory.lock:
-                    with open(scene_file, 'w', encoding='utf-8') as f_out:
-                        json.dump(scene_data, f_out, indent=2, ensure_ascii=False)
+                try:
+                    from db import get_db
+                    db = get_db()
+                    db.chat_states.update_one(
+                        {"_id": f"{character_name}_{chat_id}"},
+                        {"$set": {"scene.pending_shift": ""}}
+                    )
+                except Exception as e:
+                    print(f"[⚠️ DB ERROR] Could not clear pending_shift: {e}")
 
             return f"{bridge_text}{physical_state_text}{shift_text}\n"
 
         except Exception as e:
             print(f"[⚠️ PROMPT BUILDER] Error building scene state block: {e}")
             return ""
-
-
+        
     def _build_story_context(self, story_summary, rel_tag, scene_data_cache, genre, character_name):
         """
         Builds the narrative continuity block.
@@ -1126,86 +1135,50 @@ Reply only as {character_name}, staying present in the moment with {self.backend
 
 
     def run_due_summaries(self, max_jobs=5, min_unsummarized=20):
-        """
-        Phase 6 — synchronous, cron-safe alternative to the in-request
-        background summarization thread (see the "2. Trigger Story Summary"
-        block in generate_reply). That thread handles the common case fast
-        and is left completely untouched by this method — this is a SAFETY
-        NET, not a replacement: it exists because a daemon thread has no
-        guarantee of finishing if the process is killed/recycled mid-run
-        (a real risk on PythonAnywhere free tier), which would otherwise
-        leave a chat's chronicle silently stuck behind.
-
-        Scans every chat file on disk, checks whether enough new messages
-        have piled up since its last summary, and runs update_story_summary()
-        synchronously — bounded by max_jobs so a single call can't run
-        unbounded on a CPU-quota-limited host. Meant to be hit externally
-        (PythonAnywhere Scheduled Tasks, or any cron) via /cron/summarize.
-
-        Returns a dict; never raises — per-chat errors are collected instead
-        of aborting the whole sweep.
-        """
+        """Cron-safe sweep updated for MongoDB."""
         result = {"checked": 0, "summarized": [], "skipped": [], "errors": []}
 
-        chats_root = os.path.join(self.backend.BASE_DIR, "chats")
-        if not os.path.isdir(chats_root):
-            return result
-
-        # Reuses the SAME lock the in-request thread uses, so this sweep and
-        # a live in-request summary job can never run concurrently and
-        # stomp on each other's writes.
         if not self.backend.summary_writer_lock.acquire(blocking=False):
-            result["skipped"].append("summary_writer_lock held by another job — try again shortly")
+            result["skipped"].append("summary_writer_lock held by another job")
             return result
 
         try:
+            db = get_db()
+            # Fetch all chats from the DB
+            cursor = db.chats.find({}, {"character": 1, "chat_id": 1, "messages": 1})
             jobs_run = 0
-            for cid_dir in sorted(os.listdir(chats_root)):
-                dir_path = os.path.join(chats_root, cid_dir)
-                if not os.path.isdir(dir_path):
+
+            for chat_data in cursor:
+                if jobs_run >= max_jobs:
+                    break
+
+                character = chat_data.get("character")
+                chat_id = str(chat_data.get("chat_id", ""))
+                messages = chat_data.get("messages", [])
+                
+                if not character or not chat_id or not messages:
                     continue
 
-                for fname in sorted(os.listdir(dir_path)):
-                    if jobs_run >= max_jobs:
-                        return result
-                    if not (fname.startswith("chat_") and fname.endswith(".json")):
-                        continue
+                result["checked"] += 1
+                cid = self.backend.CHARACTER_IDS.get(character, "unknown")
+                summary_data = self.backend.advanced_memory.load_summary(cid, chat_id)
+                last_index = summary_data.get("last_summarized_index", 0)
+                unsummarized = len(messages) - last_index
 
-                    chat_path = os.path.join(dir_path, fname)
-                    result["checked"] += 1
+                if unsummarized < min_unsummarized:
+                    continue
 
-                    try:
-                        with open(chat_path, "r", encoding="utf-8") as f:
-                            chat_data = json.load(f)
-                    except Exception as e:
-                        result["errors"].append(f"{fname}: could not read ({e})")
-                        continue
-
-                    character = chat_data.get("character")
-                    chat_id = str(chat_data.get("chat_id", ""))
-                    messages = chat_data.get("messages", [])
-                    if not character or not chat_id or not messages:
-                        continue
-
-                    cid = self.backend.CHARACTER_IDS.get(character, "unknown")
-                    summary_data = self.backend.advanced_memory.load_summary(cid, chat_id)
-                    last_index = summary_data.get("last_summarized_index", 0)
-                    unsummarized = len(messages) - last_index
-
-                    if unsummarized < min_unsummarized:
-                        continue
-
-                    try:
-                        self.update_story_summary(
-                            character, chat_id, messages,
-                            messages[-1].get("turn_id", 0),
-                            summary_data.get("current_arc", ""),
-                            self.backend.BRAIN_MODEL,
-                        )
-                        result["summarized"].append(f"{character}/{chat_id}")
-                        jobs_run += 1
-                    except Exception as e:
-                        result["errors"].append(f"{character}/{chat_id}: {e}")
+                try:
+                    self.update_story_summary(
+                        character, chat_id, messages,
+                        messages[-1].get("turn_id", 0),
+                        summary_data.get("current_arc", ""),
+                        self.backend.BRAIN_MODEL,
+                    )
+                    result["summarized"].append(f"{character}/{chat_id}")
+                    jobs_run += 1
+                except Exception as e:
+                    result["errors"].append(f"{character}/{chat_id}: {e}")
         finally:
             self.backend.summary_writer_lock.release()
 
@@ -1228,19 +1201,18 @@ Reply only as {character_name}, staying present in the moment with {self.backend
         return os.path.join(self.backend.MEMORY_DIR, f"{cid}_{chat_id}_reflection_state.json")
 
     def _load_reflection_state(self, character, chat_id):
-        path = self._reflection_state_path(character, chat_id)
-        if not os.path.exists(path):
-            return {"last_reflection_ts": 0}
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {"last_reflection_ts": 0}
+        db = get_db()
+        doc = db.reflections.find_one({"_id": f"{character}_{chat_id}"})
+        return doc if doc else {"last_reflection_ts": 0}
 
     def _save_reflection_state(self, character, chat_id, state):
         try:
-            with open(self._reflection_state_path(character, chat_id), "w", encoding="utf-8") as f:
-                json.dump(state, f, indent=2, ensure_ascii=False)
+            db = get_db()
+            db.reflections.update_one(
+                {"_id": f"{character}_{chat_id}"},
+                {"$set": state},
+                upsert=True
+            )
         except Exception as e:
             print(f"[⚠️ REFLECTION STATE] save failed: {e}")
 
@@ -1456,10 +1428,10 @@ Reply only as {character_name}, staying present in the moment with {self.backend
         if len(full_history) < 10: return ""
 
         cid = self.backend.CHARACTER_IDS.get(character, "unknown")
-        summary_path = self.get_summary_file(character, chat_id)
-        backup_path = summary_path + ".bak"
+        from db import get_db
+        db = get_db()
 
-        # Load the existing summary
+        # Load the existing summary natively through the updated manager
         summary_data = self.backend.advanced_memory.load_summary(cid, chat_id)
 
         # --- NEW: Track how many messages have passed since the last flush ---
@@ -1468,17 +1440,16 @@ Reply only as {character_name}, staying present in the moment with {self.backend
 
         # --- CORRUPTION RECOVERY (Auto-Heal) ---
         old_arc = summary_data.get("current_arc", "")
-        # Check if previous runs already corrupted the file
         if "Error: All cloud APIs failed" in old_arc or "Local model failed" in old_arc:
             print("[⚠️ CORRUPTION DETECTED] Summary contains an error. Attempting to restore backup...")
-
-            if os.path.exists(backup_path):
-                shutil.copy(backup_path, summary_path)
-                # Reload the cleanly restored backup
+            
+            backup_doc = db.summaries_bak.find_one({"_id": f"{cid}_{chat_id}"})
+            if backup_doc:
+                db.summaries.update_one({"_id": f"{cid}_{chat_id}"}, {"$set": backup_doc}, upsert=True)
                 summary_data = self.backend.advanced_memory.load_summary(cid, chat_id)
-                print("[✅ RECOVERY SUCCESSFUL] Loaded older, clean summary.")
+                print("[✅ RECOVERY SUCCESSFUL] Loaded older, clean summary from DB backup.")
             else:
-                summary_data["current_arc"] = "" # Wipe the garbage to start fresh
+                summary_data["current_arc"] = "" 
                 print("[⚠️ NO BACKUP FOUND] Wiped corrupted current_arc.")
 
         # 1. DYNAMIC CHUNKING: Find out exactly where we left off
@@ -1492,14 +1463,12 @@ Reply only as {character_name}, staying present in the moment with {self.backend
         start_idx = max(0, last_index - 4)
         recent_chunk = full_history[start_idx:]
 
-        # If there aren't enough new messages to warrant a summary, skip it
         if len(recent_chunk) < 6:
             return ""
 
         history_text = "\n".join([f"{{{{user}}}}: {m['content']}" if m['role'] == 'user' else f"{{{{char}}}}: {m['content']}" for m in recent_chunk])
         old_arc = current_arc
         chronicle = summary_data.get("chronicle", [])
-
 
         # Phase 1: Update the Current Arc & Extract Quotes
         update_prompt = f"""You are the hidden cognitive engine managing an ongoing uncensored roleplay story.
@@ -1528,22 +1497,17 @@ Reply only as {character_name}, staying present in the moment with {self.backend
             {{{{char}}}}: "exact quote"
             """
 
-
         try:
             messages = [
                 {"role": "system", "content": "You are a highly capable AI narrative archivist."},
                 {"role": "user", "content": update_prompt.strip()}
             ]
-            # ── FIX 5: Use Mistral 24B fallback if the selected model is Groq and fails
             new_arc = self._call_with_groq_mistral_fallback(
                 messages,
                 {"temperature": 0.3, "max_tokens": 500, "top_p": 0.9},
                 model_choice
             ).strip()
 
-            # --- ENHANCED SAFETY GUARD (Fix 2) ---
-            # Reject the arc if: API failed, output is empty, too short to be real,
-            # or the model echoed back the prompt/instructions instead of summarising.
             _arc_word_count = len(new_arc.split())
             _arc_is_api_error = (
                 "Error: All cloud APIs failed" in new_arc
@@ -1551,30 +1515,31 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 or "Error: All Groq APIs" in new_arc
             )
             _arc_is_junk = (
-                not new_arc                          # empty string
-                or _arc_word_count < 10              # too short to be a real summary
-                or "TASK:" in new_arc                # model echoed the prompt back
-                or "CRITICAL RULES" in new_arc       # model echoed instructions back
-                or new_arc.startswith("From this")   # model describing its own task
+                not new_arc                          
+                or _arc_word_count < 10              
+                or "TASK:" in new_arc                
+                or "CRITICAL RULES" in new_arc       
+                or new_arc.startswith("From this")   
             )
             if _arc_is_api_error or _arc_is_junk:
                 print(f"[⚠️ STORY SUMMARY GUARD] Bad arc rejected "
                       f"(words={_arc_word_count}). Keeping previous arc. Will retry next turn.")
                 return
+
             # === NEW: COMBINED EXPERIENCE & INTIMACY EXTRACTOR ===
             extract_prompt = f"""From this story arc, extract a JSON object tracking {character}'s established experience with {{{{user}}}}.
 
                 ### EXTRACTION THRESHOLD (CRITICAL) ###
-                1. HIGH-WEIGHT EVENTS ONLY: You must ONLY extract major events, formal dates, location-based activities, or significant milestones (e.g., "dinner at a restaurant", "taking a shower together", "attending the theater", "sleeping in the same bed").
-                2. IGNORE MICRO-ACTIONS: DO NOT extract fleeting gestures, basic physical affection, or conversational filler. STRICTLY PROHIBITED: "holding hands", "teasing", "kissing", "hugging", "talking", "cuddling".
-                3. EXPLICIT ACTS: Extract the EXACT explicit sexual acts and kinks (e.g., "rough doggy style", "blowjob with deepthroating"). Do not use vague euphemisms like "passionate lovemaking".
+                1. HIGH-WEIGHT EVENTS ONLY: You must ONLY extract major events, formal dates, location-based activities, or significant milestones.
+                2. IGNORE MICRO-ACTIONS: DO NOT extract fleeting gestures, basic physical affection, or conversational filler.
+                3. EXPLICIT ACTS: Extract the EXACT explicit sexual acts and kinks. Do not use vague euphemisms like "passionate lovemaking".
 
                 Output ONLY raw JSON. Example:
                 {{
-                "shared_activities": ["dinner at Italian restaurant", "watched a movie at the theater", "took a shower together"],
+                "shared_activities": ["dinner at Italian restaurant"],
                 "intimacy_profile": {{
-                    "established_roles": ["dominant", "submissive"],
-                    "acts_done": ["performed oral sex", "rough sex from behind"],
+                    "established_roles": ["dominant"],
+                    "acts_done": ["performed oral sex"],
                     "comfort_level": "high"
                     }}
                 }}
@@ -1593,13 +1558,11 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 if match:
                     extracted_data = repair_json(match.group(0), return_objects=True)
                     if extracted_data and isinstance(extracted_data, dict):
-                        # Merge General Activities (Keep last 15)
                         new_activities = extracted_data.get("shared_activities", [])
                         existing_activities = summary_data.get("shared_activities", [])
                         merged_activities = list(dict.fromkeys(existing_activities + new_activities))[-15:]
                         summary_data["shared_activities"] = merged_activities
 
-                        # Merge Intimacy Profile (Keep last 15)
                         new_intimacy = extracted_data.get("intimacy_profile", {})
                         existing_intimacy = summary_data.get("intimacy_profile", {})
                         roles = list(dict.fromkeys(existing_intimacy.get("established_roles", []) + new_intimacy.get("established_roles", [])))[-10:]
@@ -1612,35 +1575,29 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                         }
             except Exception as e:
                 print(f"[⚠️ EXPERIENCE EXTRACTOR ERROR] {e}")
+
             # =====================================================
             # Phase 2: ARC MEMORY FLUSH (Rolling Overlap Mechanism)
             # =====================================================
 
-            # Check if the Brain detected a scene end in the last few turns
-            scene_data_path = self.backend.advanced_memory.get_scene_file(character, chat_id)
             force_flush = False
             try:
-                if os.path.exists(scene_data_path):
-                    with open(scene_data_path, 'r') as f:
-                        s_data = json.load(f)
-                        if s_data.get("scene_ended", False):
-                            force_flush = True
-                            # Reset the flag so it doesn't loop
-                            s_data["scene_ended"] = False
-                            with open(scene_data_path, 'w') as f_out:
-                                json.dump(s_data, f_out)
+                doc = db.chat_states.find_one({"_id": f"{character}_{chat_id}"})
+                if doc and "scene" in doc:
+                    if doc["scene"].get("scene_ended", False):
+                        force_flush = True
+                        db.chat_states.update_one(
+                            {"_id": f"{character}_{chat_id}"}, 
+                            {"$set": {"scene.scene_ended": False}}
+                        )
             except Exception: pass
 
-            # Trigger flush if scene ended naturally OR if the buffer is too bloated
-            # (350 words is roughly 30 to 40 turns of accumulated summaries)
-            # Trigger flush if scene ended naturally OR if 40 turns (80 messages) have passed
             if force_flush or messages_since_flush >= 80:
                 print(f"[🧠 ARC FLUSH] Triggered after {messages_since_flush // 2} turns.")
 
-
                 flush_prompt = f"""The following story summary has grown too long. Split it into two distinct parts:
                     1. 'archived_arc': A highly dense, single-paragraph summary of the older, completed events.
-                    2. 'carried_forward_arc': A concise summary of the MOST RECENT events, the current physical state, and unresolved tension. This will serve as the new ongoing context so the AI does not forget what is happening right now.
+                    2. 'carried_forward_arc': A concise summary of the MOST RECENT events, the current physical state, and unresolved tension.
 
                     [CURRENT ARC TO SPLIT]
                     {new_arc}
@@ -1659,28 +1616,23 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                         try:
                             flush_data = repair_json(match.group(0), return_objects=True)
                             if flush_data and flush_data.get("archived_arc") and flush_data.get("carried_forward_arc"):
-                                # 1. Push the older summary to the chronological Arc Memory
                                 chronicle.append(flush_data["archived_arc"])
-
-                                # 2. INSTEAD OF WIPING, KEEP THE RECENT CONTEXT!
                                 new_arc = flush_data["carried_forward_arc"]
                                 summary_data["last_flush_index"] = len(full_history)
-
                                 print("[🧠 ARC FLUSH] Arc successfully split. Older events chronicled, recent context preserved.")
-
                         except Exception as e:
                             print(f"[⚠️ FLUSH ERROR] {e}")
-            # =====================================================
 
-            # --- FILE VERSIONING: CREATE A BACKUP BEFORE OVERWRITING ---
-
-            if os.path.exists(summary_path):
-                shutil.copy(summary_path, backup_path)
+            # --- MONGODB VERSIONING: CREATE A BACKUP BEFORE OVERWRITING ---
+            current_summary_doc = db.summaries.find_one({"_id": f"{cid}_{chat_id}"})
+            if current_summary_doc:
+                db.summaries_bak.update_one(
+                    {"_id": f"{cid}_{chat_id}"},
+                    {"$set": current_summary_doc},
+                    upsert=True
+                )
 
             # ── MILESTONE EXTRACTION ──────────────────────────────────────────
-            # Replaces raw current_arc injection in the chat prompt.
-            # One present-tense sentence (≤15 words) — relational state only,
-            # no past events, no replay bait for the reactive model.
             _milestone_prompt = (
                 f"From this story arc, write ONE sentence (maximum 15 words) "
                 f"describing the current emotional or relational state between "
@@ -1689,23 +1641,11 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 f"ARC:\n{new_arc}\n\nONE SENTENCE:"
             )
             _milestone_msgs = [
-                {
-                    "role": "system",
-                    "content": "You are a concise narrative state extractor. Output one sentence only. No preamble."
-                },
-                {
-                    "role": "user",
-                    "content": _milestone_prompt
-                }
+                {"role": "system", "content": "You are a concise narrative state extractor. Output one sentence only. No preamble."},
+                {"role": "user", "content": _milestone_prompt}
             ]
             try:
-                _raw_milestone = "".join(
-                    self.backend.call_selected_model(
-                        _milestone_msgs,
-                        {"temperature": 0.2, "max_tokens": 40, "top_p": 0.9},
-                        model_choice
-                    )
-                ).strip()
+                _raw_milestone = "".join(self.backend.call_selected_model(_milestone_msgs, {"temperature": 0.2, "max_tokens": 40, "top_p": 0.9}, model_choice)).strip()
                 _words = _raw_milestone.split()
                 relationship_milestone = " ".join(_words[:15]) if _words else ""
                 if not relationship_milestone or "Error:" in relationship_milestone:
@@ -1716,9 +1656,7 @@ Reply only as {character_name}, staying present in the moment with {self.backend
             summary_data["relationship_milestone"] = relationship_milestone
             if relationship_milestone:
                 print(f"[✅ MILESTONE] {relationship_milestone}")
-            # ─────────────────────────────────────────────────────────────────
 
-            # Save the updated tiers AND the new index marker
             summary_data["current_arc"] = new_arc
             summary_data["chronicle"] = chronicle
             summary_data["last_summarized_index"] = len(full_history)
@@ -1726,39 +1664,35 @@ Reply only as {character_name}, staying present in the moment with {self.backend
             # --- NEW: SAVE LIGHTWEIGHT CHECKPOINT ---
             checkpoints = summary_data.get("checkpoints", {})
             snapshot_turn_id = turn_id
-
-
             current_turn_str = str(snapshot_turn_id)
-
-            # Load, wipe bridge, and save the current physical state
-            state_file = os.path.join(self.backend.MEMORY_DIR, f"{character}_{chat_id}_state.json")
 
             # LOCK added here to stop the Brain thread from overwriting the wipe!
             with self.backend.advanced_memory.lock:
-                # 1. Load the current physical state
-                current_scene_state = SceneState.load_from_file(state_file)
+                doc = db.chat_states.find_one({"_id": f"{character}_{chat_id}"})
+                scene_dict = doc.get("scene", {}) if doc else {}
+                current_scene_state = SceneState.from_dict(scene_dict)
 
-                # 2. THE CONTINUITY ANCHOR: Don't leave it blank.
-                # Give the LLM explicit instructions on how to handle the present.
                 current_scene_state.recent_action_bridge = "[The broader events have settled. Anchor yourself completely in the current physical state and the immediate conversation.]"
 
-                # 3. Save the cleared state back to disk
-                current_scene_state.save_to_file(state_file)
+                # Update the document dictionary and push to DB
+                scene_dict.update(current_scene_state.to_dict())
+                db.chat_states.update_one(
+                    {"_id": f"{character}_{chat_id}"}, 
+                    {"$set": {"scene": scene_dict}},
+                    upsert=True
+                )
 
-                # 4. Grab the clean dict for the checkpoint snapshot
                 current_state_dict = current_scene_state.to_dict()
-            # Chronicle is strictly bounded to 12 points.
-            # Older points are already embedded in the Vector DB.
+                
             if len(chronicle) > 12:
                 chronicle = chronicle[-12:]
                 print(f"[🧠 CHRONICLE TRIM] Dropped oldest events. Chronicle strictly bounded to 12.")
-
 
             checkpoints[current_turn_str] = {
                 "current_arc": new_arc,
                 "chronicle": list(chronicle),
                 "last_summarized_index": len(full_history),
-                "physical_state": current_state_dict  # <-- ADD THIS LINE
+                "physical_state": current_state_dict  
             }
             summary_data["checkpoints"] = checkpoints
 
@@ -1768,7 +1702,6 @@ Reply only as {character_name}, staying present in the moment with {self.backend
             return new_arc
         except Exception as e:
             print(f"[⚠️ STORY SUMMARY ERROR] -> {e}")
-
 
     def _call_brain_with_fallback(self, brain_msgs, brain_settings):
         """
@@ -1841,36 +1774,26 @@ Reply only as {character_name}, staying present in the moment with {self.backend
 
 
     def _run_background_brain_update(self, character, chat_id, recent_messages, turn_id, current_arc="", total_msgs=0):
-        fact_file = self.backend.advanced_memory.get_fact_file(character, chat_id)
-        scene_file = self.backend.advanced_memory.get_scene_file(character, chat_id)
-        state_file = os.path.join(self.backend.MEMORY_DIR, f"{character}_{chat_id}_state.json")
+        from db import get_db
+        db = get_db()
+        doc_id = f"{character}_{chat_id}"
+
         with self.backend.advanced_memory.lock:
             # 1. REBUILD EXISTING FACTS FROM EVENT LOG FOR THE PROMPT
-            event_log = []
+            doc = db.chat_states.find_one({"_id": doc_id}) or {}
+            event_log = doc.get("facts", {}).get("event_log", [])
             existing_facts = {}
-            if os.path.exists(fact_file):
-                try:
-                    with open(fact_file, 'r', encoding='utf-8') as f:
-                        event_log = json.load(f).get("event_log", [])
-                        for event in event_log:
-                            if event.get("turn_id", 0) <= turn_id:
-                                existing_facts[event["trait"]] = event["value"]
-                except: pass
+            
+            for event in event_log:
+                if event.get("turn_id", 0) <= turn_id:
+                    existing_facts[event["trait"]] = event["value"]
 
-            current_disposition = "Unknown starting dynamic."
-            _scene_data_on_disk = {}  # preserved for trust delta updater below
-            if os.path.exists(scene_file):
-                try:
-                    with open(scene_file, 'r', encoding='utf-8') as f:
-                        _scene_data_on_disk = json.load(f)
-                        current_disposition = _scene_data_on_disk.get("current_disposition", current_disposition)
-                except: pass
+            _scene_data_on_disk = doc.get("scene", {})
+            current_disposition = _scene_data_on_disk.get("current_disposition", "Unknown starting dynamic.")
 
         convo_text = "\n".join([f"{{{{user}}}}: {m['content']}" if m['role']=='user' else f"{{{{char}}}}: {m['content']}" for m in recent_messages])
 
         mode = self.backend.CHARACTER_MODES.get(character, "general")
-
-       # DYNAMIC MICRO INTENT TOGGLE
         char_settings = self.backend.CHARACTER_SETTINGS.get(character, {})
         use_scene_brain = char_settings.get("use_scene_brain", False)
 
@@ -1880,8 +1803,8 @@ Reply only as {character_name}, staying present in the moment with {self.backend
             intent_rule = "- PROACTIVE INTENT: Characters are not brick walls. 'active_intentions' must reflect what they WANT to do next.\n"
             intent_schema_injected = ',\n    "active_intentions": "What the character is proactively trying to achieve or allow next"'
 
-        # --- FIX: Load the state into memory BEFORE building the prompt ---
-        current_scene_state = self.backend.ram_state_cache if self.backend.ram_state_cache else SceneState.load_from_file(state_file)
+        # Load state into memory before building the prompt
+        current_scene_state = self.backend.ram_state_cache if self.backend.ram_state_cache else SceneState.from_dict(_scene_data_on_disk)
 
         prompt_unified = f"""JSON Memory Engine. Analyze exchange, output ONLY raw JSON.
 
@@ -1934,7 +1857,6 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 {"role": "user", "content": prompt_unified}
             ]
 
-            # ── FIX 5: Use fallback chain — Groq primary, Mistral 24B secondary
             brain_settings = {"temperature": 0.1, "max_tokens": 800, "top_p": 0.9}
             reply_unified = self._call_brain_with_fallback(brain_msgs, brain_settings)
 
@@ -1951,10 +1873,6 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                     print("[⚠️ BRAIN PARSE ERROR] json-repair could not salvage the output.")
                     return
 
-                # ── FIX 5: VALIDATE BRAIN OUTPUT BEFORE WRITING TO DISK ──────
-                # The brain runs at temperature 0.1 but can still echo back prompt
-                # fragments or produce placeholder text. Any such field written to
-                # disk becomes a hallucination seed for every future reply.
                 _PROMPT_ECHOES = {
                     "MANDATORY", "CONSTRAINTS", "JSON Memory Engine",
                     "{{user}}", "{{char}}", "Output ONLY", "schema",
@@ -1962,42 +1880,34 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 }
 
                 def _brain_field_ok(val):
-                    """True only if val is a non-empty, non-echo, usable string."""
                     if not val or not isinstance(val, str):
                         return False
-                    if len(val.split()) < 2:          # single-word placeholder
+                    if len(val.split()) < 2:
                         return False
                     for echo in _PROMPT_ECHOES:
                         if echo in val:
                             return False
                     return True
 
-                # Validate scene_state sub-fields — silently drop any echoed value
-                # so the existing on-disk value is preserved by the .get() fallback.
                 if "scene_state" in data and isinstance(data["scene_state"], dict):
                     ns = data["scene_state"]
-                    for _field in ["environment", "physical_state",
-                                   "proximity", "recent_action_bridge", "current_objective"]:
+                    for _field in ["environment", "physical_state", "proximity", "recent_action_bridge", "current_objective"]:
                         if not _brain_field_ok(ns.get(_field, "")):
                             ns.pop(_field, None)
                             print(f"[⚠️ BRAIN VALIDATION] Dropped suspicious '{_field}' — keeping previous value.")
 
-                # Validate new_facts — reject placeholders and schema descriptions
                 if "new_facts" in data and isinstance(data["new_facts"], dict):
-                    _FACT_JUNK = {"leave empty", "describe newly", "major irreversible",
-                                  "trait/milestone", "none"}
+                    _FACT_JUNK = {"leave empty", "describe newly", "major irreversible", "trait/milestone", "none"}
                     data["new_facts"] = {
                         k: v for k, v in data["new_facts"].items()
-                        if _brain_field_ok(v)
-                        and not any(j in str(v).lower() for j in _FACT_JUNK)
+                        if _brain_field_ok(v) and not any(j in str(v).lower() for j in _FACT_JUNK)
                     }
-                # ─────────────────────────────────────────────────────────────
 
                 with self.backend.advanced_memory.lock:
-                    # ---> FIX 1: FRESH LOAD BEFORE UPDATING <---
-                    # Load the state right now, so we don't overwrite the Continuity Anchor
-                    # that the Summary thread might have just saved 5 seconds ago!
-                    current_scene_state = SceneState.load_from_file(state_file)
+                    # Load the absolute latest state from the DB to avoid race conditions
+                    fresh_doc = db.chat_states.find_one({"_id": doc_id}) or {}
+                    fresh_scene = fresh_doc.get("scene", {})
+                    current_scene_state = SceneState.from_dict(fresh_scene)
 
                     # --- 1. PROCESS PHYSICAL ACTIONS ---
                     actions = data.get("physical_actions", [])
@@ -2015,52 +1925,39 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                         current_scene_state.physical_state = ns.get("physical_state", current_scene_state.physical_state)
                         current_scene_state.recent_action_bridge = ns.get("recent_action_bridge", getattr(current_scene_state, "recent_action_bridge", ""))
                         if use_scene_brain:
-                            current_scene_state.active_intentions = ns.get("active_intentions", current_scene_state.active_intentions)
+                            current_scene_state.active_intentions = ns.get("active_intentions", getattr(current_scene_state, "active_intentions", ""))
 
                         print(f"[🔥 STATE UPDATED] {current_scene_state.physical_state}")
 
-                    # Save the unified state
-                    current_scene_state.save_to_file(state_file)
-
-                    # ---> ADD THIS LINE TO SYNC THE RAM CACHE <---
                     self.backend.ram_state_cache = current_scene_state
                     _checkpoint_state_dict = current_scene_state.to_dict()
-                    # ---> FIX 2: PATCH THE SUMMARY CHECKPOINT <---
-                    # If the Summary thread saved a checkpoint while we were calculating,
-                    # it saved the OLD clothed state. We must overwrite that checkpoint
-                    # with the new physical state so the Undo button doesn't break everything!
-
 
                     if "scene_analysis" in data and data["scene_analysis"]:
                         print(f"[🧠 TRACKER THOUGHTS]: {data['scene_analysis']}")
 
                     # --- 3. PROCESS COGNITIVE ARCHIVE ---
-                    # --- 3. PROCESS COGNITIVE ARCHIVE ---
                     if "new_facts" in data and isinstance(data["new_facts"], dict):
                         for trait, value in data["new_facts"].items():
                             if trait and value and "leave empty" not in str(value).lower():
                                 event_log.append({"trait": trait, "value": value, "turn_id": turn_id})
-                        with open(fact_file, 'w', encoding='utf-8') as f:
-                            json.dump({"event_log": event_log}, f, indent=2, ensure_ascii=False)
-                        # Keep RAM in sync so _build_facts_text sees new facts on the very
-                        # next turn instead of only after the chat is reloaded.
+                        
                         self.backend.ram_facts_cache = {"event_log": event_log}
+                        
+                        db.chat_states.update_one(
+                            {"_id": doc_id}, 
+                            {"$set": {"facts.event_log": event_log}}, 
+                            upsert=True
+                        )
 
-                    # Get existing emotional state to default to if missing
-                    current_emotional_state = _scene_data_on_disk.get("emotional_state", {})
+                    current_emotional_state = fresh_scene.get("emotional_state", {})
 
-                    # --- ARCHIVE THE EMOTIONAL BEAT (before it would otherwise be discarded) ---
-                    # `significant_shift_detected` used to only live as a one-shot `pending_shift`
-                    # nudge (shown to the model once via _build_scene_state_block, then wiped).
-                    # We now ALSO persist it verbatim to the EmotionalBeatBank so it survives
-                    # regardless of how much `current_arc` gets compressed into `chronicle` later.
                     shift_note = data.get("significant_shift_detected", "")
                     if _brain_field_ok(shift_note):
                         try:
                             new_emotional_state = data.get("emotional_state", {}) or {}
                             prev_trust = current_emotional_state.get("trust_level")
                             new_trust = new_emotional_state.get("trust_level")
-                            intensity = 3  # base: the tracker itself flagged this as significant
+                            intensity = 3  
                             try:
                                 if prev_trust is not None and new_trust is not None:
                                     intensity += abs(int(new_trust) - int(prev_trust))
@@ -2085,23 +1982,26 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                             print(f"[⚠️ BEAT BANK ERROR] -> {e}")
 
                     # ── SCENE DATA SAVER (FULLY AGNOSTIC) ────────────────────
-                    scene_data = {
-                        "pending_shift": data.get("significant_shift_detected", ""),
-                        "scene_ended": data.get("scene_ended", False),
-                        "micro_intent": data.get("micro_intent", ""),
-                        "emotional_state": data.get("emotional_state", current_emotional_state),
-                        "last_brain_update_index": total_msgs if total_msgs > 0 else len(recent_messages)
-                    }
-                    with open(scene_file, 'w', encoding='utf-8') as f:
-                        json.dump(scene_data, f, indent=2, ensure_ascii=False)
+                    # Merge properties carefully to maintain relationship tags
+                    updated_scene_data = dict(fresh_scene)
+                    updated_scene_data.update(current_scene_state.to_dict())
+                    updated_scene_data["pending_shift"] = data.get("significant_shift_detected", "")
+                    updated_scene_data["scene_ended"] = data.get("scene_ended", False)
+                    updated_scene_data["micro_intent"] = data.get("micro_intent", "")
+                    updated_scene_data["emotional_state"] = data.get("emotional_state", current_emotional_state)
+                    updated_scene_data["last_brain_update_index"] = total_msgs if total_msgs > 0 else len(recent_messages)
 
-                    self.backend.ram_scene_cache = scene_data
+                    db.chat_states.update_one(
+                        {"_id": doc_id}, 
+                        {"$set": {"scene": updated_scene_data}}, 
+                        upsert=True
+                    )
+
+                    self.backend.ram_scene_cache = updated_scene_data
 
                     print(f"[🧠 BRAIN] Scene state and timeline updated for {character}.")
 
-                # ← lock releases here
-
-                # CHECKPOINT PATCH — outside the lock to prevent re-entry deadlock
+                # CHECKPOINT PATCH 
                 try:
                     cid = self.backend.CHARACTER_IDS.get(character, "unknown")
                     _summary_patch = self.backend.advanced_memory.load_summary(cid, chat_id)
@@ -2111,11 +2011,9 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 except Exception as e:
                     print(f"[⚠️ CHECKPOINT PATCH ERROR] {e}")
 
-
                 print(f"[🧠 HYBRID BRAIN] Unified 70B update for {character} completed successfully.", flush=True)
         except Exception as e:
             print(f"[⚠️ UNIFIED BRAIN ERROR] -> {e}")
-
 
     def _prefetch_memory(self, recent_history, last_user_text, character, chat_id):
         """Runs vector search in background right after a reply completes,

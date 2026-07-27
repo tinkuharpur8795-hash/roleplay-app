@@ -23,24 +23,39 @@ class EmotionalBeatBank:
     MAX_BEATS = 60  # generous ceiling; beats are 1-2 sentences each
 
     def __init__(self, base_dir, character, chat_id):
-        self.path = os.path.join(base_dir, "memory", f"{character}_{chat_id}_beats.json")
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        # base_dir kept for signature compatibility with memory_context.py
+        self.character = character
+        self.chat_id = str(chat_id)
         self._lock = threading.Lock()
         self.beats = self._load()
 
     def _load(self):
-        if os.path.exists(self.path):
-            try:
-                with open(self.path, "r", encoding="utf-8") as f:
-                    return json.load(f).get("beats", [])
-            except Exception:
-                return []
+        try:
+            from db import get_db
+            db = get_db()
+            doc = db.emotional_beats.find_one({"_id": f"{self.character}_{self.chat_id}"})
+            if doc and "beats" in doc:
+                return doc.get("beats", [])
+        except Exception as e:
+            print(f"[⚠️ BEATS DB] Load error: {e}")
         return []
-
+    
     def _save(self):
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump({"beats": self.beats}, f, indent=2, ensure_ascii=False)
-
+        try:
+            from db import get_db
+            db = get_db()
+            db.emotional_beats.update_one(
+                {"_id": f"{self.character}_{self.chat_id}"},
+                {"$set": {
+                    "beats": self.beats, 
+                    "character": self.character, 
+                    "chat_id": self.chat_id
+                }},
+                upsert=True
+            )
+        except Exception as e:
+            print(f"[⚠️ BEATS DB] Save error: {e}")
+            
     def add_beat(self, turn_id, verbatim, trigger="", surface_affect="",
                  concealed_feeling="", label="", intensity=1):
         """
