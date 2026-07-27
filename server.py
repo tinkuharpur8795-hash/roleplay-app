@@ -548,15 +548,16 @@ def load_chat():
     return jsonify({"status": "error"}), 400
 
 def _is_safe_chat_path(path):
-    """Confirms a client-supplied chat path actually lives under BASE_DIR/chats
-    before we let /edit_message write to it."""
+    """Confirms a client-supplied chat path matches the new MongoDB pseudo-path format (character::id)."""
     try:
-        chats_root = os.path.abspath(os.path.join(backend.BASE_DIR, "chats"))
-        target     = os.path.abspath(path)
-        return os.path.commonpath([chats_root, target]) == chats_root
+        if not path or "::" not in path:
+            return False
+        character, chat_id = path.split("::")
+        int(chat_id) # Ensure the chat_id segment is actually a valid number
+        return True
     except Exception:
         return False
-
+    
 @app.route("/edit_message", methods=["POST"])
 def edit_message():
     """Powers the hover-to-edit pencil on any message bubble (past or present)."""
@@ -567,8 +568,9 @@ def edit_message():
         role    = data.get("role")
         content = data.get("content")
 
-        if not path or not _is_safe_chat_path(path) or not os.path.exists(path):
-            return jsonify({"status": "error", "message": "Chat file not found."}), 404
+        # Removed os.path.exists; solely rely on our new pseudo-path string validator
+        if not path or not _is_safe_chat_path(path):
+            return jsonify({"status": "error", "message": "Invalid chat path format."}), 400
         if not isinstance(index, int):
             return jsonify({"status": "error", "message": "Missing or invalid message index."}), 400
         if content is None:
@@ -580,7 +582,6 @@ def edit_message():
     except Exception as e:
         print(f"[⚠️ EDIT MSG] edit_message() failed:\n{traceback.format_exc()}")
         return jsonify({"status": "error", "message": f"Server error while saving message: {e}"}), 500
-
 # ── DELETE — full deep scrub matching Tkinter action_delete_chat ──
 @app.route("/delete_chat", methods=["POST"])
 def delete_chat():
@@ -746,6 +747,12 @@ def cron_proactive_check():
             print(f"[🔔 PROACTIVE] {kind} for {character}/{chat_id} — Telegram sent: {sent}")
             results.append({"kind": kind, "sent": sent, "text": text})
         return jsonify({"status": "ok", "fired": results})
+    
+    except ValueError as ve:
+        # Gracefully handle missing database records (e.g., brand new Mongo DB)
+        print(f"[⚠️ PROACTIVE] Skipped: {ve}")
+        return jsonify({"status": "skipped", "message": str(ve)}), 200
+        
     except Exception as e:
         print(f"[⚠️ PROACTIVE] cron_proactive_check() failed:\n{traceback.format_exc()}")
         return jsonify({"status": "error", "message": str(e)}), 500
