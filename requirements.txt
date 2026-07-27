@@ -20,7 +20,7 @@ Jinja2==3.1.6
 jiter==0.16.0
 json_repair==0.61.4
 MarkupSafe==3.0.3
-
+gunicorn==22.0.0
 msgspec==0.21.1
 numpy==2.5.1
 openai==2.45.0
