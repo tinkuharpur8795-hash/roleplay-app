@@ -155,6 +155,12 @@ class RoleplayBackend:
             limits=httpx.Limits(max_keepalive_connections=20, keepalive_expiry=120.0),
             timeout=httpx.Timeout(20.0)
         )
+        PROACTIVE_WINDOWS = {
+        # kind: (start_hour, start_minute, end_hour, end_minute) — all in IST
+            "morning":     (7, 0, 9, 0),
+            "missing_you": (13, 0, 17, 0),
+            "night":       (21, 0, 23, 0),
+        }
         # API Keys & Models
         self.CLOUD_APIS = [
             {"name": "OpenRouter API 1", "base_url": "https://openrouter.ai/api/v1", "api_key": os.getenv("OPENROUTER_KEY_1")},
@@ -354,6 +360,7 @@ class RoleplayBackend:
                 "size_b": 35,
             },
             }
+    
 
 
         self.emoji_pattern = re.compile("["
