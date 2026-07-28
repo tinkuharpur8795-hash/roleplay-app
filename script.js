@@ -1980,49 +1980,41 @@ function attachEventListeners() {
           return;
         }
 
-        charChatDropdown.innerHTML = `<div style="padding: 10px; color: var(--text-muted); font-size: 12px; text-align: center;">Loading chats...</div>`;
+        // FIX: Bypass the server endpoint entirely. 
+        // Filter the ALL_CHATS array that script.js has already securely loaded from MongoDB!
+        const characterChats = ALL_CHATS.filter(c => c.character === character);
 
-        // Fetch specifically filtered list via backend route
-        fetch('/chat_list', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ character: character })
-        })
-        .then(r => r.json())
-        .then(chats => {
-          charChatDropdown.innerHTML = "";
-          if (!chats || chats.length === 0) {
-            charChatDropdown.innerHTML = `<div style="padding: 10px; color: var(--text-muted); font-size: 12px; text-align: center;">No chat history found</div>`;
-            return;
-          }
+        charChatDropdown.innerHTML = "";
+        
+        if (characterChats.length === 0) {
+          charChatDropdown.innerHTML = `<div style="padding: 10px; color: var(--text-muted); font-size: 12px; text-align: center;">No chat history found</div>`;
+          return;
+        }
 
-          // Use your existing formatChatDate and escapeHtml utilities
-          chats.forEach(chat => {
-            const btn = document.createElement("button");
-            btn.className = "char-chat-dropdown-item";
-            const dateStr = chat.last_activity ? formatChatDate(chat.last_activity) : "";
+        // Populate the dropdown instantly from memory
+        characterChats.forEach(chat => {
+          const btn = document.createElement("button");
+          btn.className = "char-chat-dropdown-item";
+          
+          // Use the global formatChatDate function from script.js
+          const dateStr = chat.last_activity ? formatChatDate(chat.last_activity) : "";
 
-            btn.innerHTML = `
-              <strong>${escapeHtml(chat.title || "Chat " + chat.chat_id)}</strong>
-              <span class="chat-date">${escapeHtml(chat.preview || "No messages yet")} • ${dateStr}</span>
-            `;
+          btn.innerHTML = `
+            <strong>${escapeHtml(chat.title || "Chat " + chat.chat_id)}</strong>
+            <span class="chat-date">${escapeHtml(chat.preview || "No messages yet")} • ${dateStr}</span>
+          `;
 
-            btn.addEventListener("click", () => {
-              // Loads the selected chat without refreshing the page
-              loadChat(chat.path); 
-              charChatDropdown.classList.add("hidden");
-            });
-
-            charChatDropdown.appendChild(btn);
+          btn.addEventListener("click", () => {
+            loadChat(chat.path); 
+            charChatDropdown.classList.add("hidden");
           });
-        })
-        .catch(() => {
-          charChatDropdown.innerHTML = `<div style="padding: 10px; color: #E5675F; font-size: 12px; text-align: center;">Failed to load chats</div>`;
+
+          charChatDropdown.appendChild(btn);
         });
       }
     });
 
-    // Close dropdown when clicking outside
+    // Close dropdown when clicking anywhere else on the page
     document.addEventListener('click', (e) => {
       if (!charChatToggle.contains(e.target)) {
         charChatDropdown.classList.add('hidden');
