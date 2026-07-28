@@ -810,6 +810,42 @@ def telegram_webhook():
         print(f"[⚠️ TELEGRAM] telegram_webhook() failed:\n{traceback.format_exc()}")
         send_telegram_message(f"⚠️ Reply failed, nothing was saved — try again: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+# ══════════════════════════════════════════════════════════════════
+# WHATSAPP WEBHOOK — Twilio Sandbox (Easier alternative to Meta)
+# ══════════════════════════════════════════════════════════════════
+@app.route("/whatsapp/twilio", methods=["POST"])
+def twilio_whatsapp():
+    try:
+        # Twilio sends incoming message data as form-urlencoded values
+        sender_phone = request.values.get('From', '')
+        text = request.values.get('Body', '')
+
+        # Security: Ignore empty messages
+        if not text:
+            return "<Response></Response>", 200, {'Content-Type': 'text/xml'}
+
+        # Route the message through your existing LLM pipeline
+        reply_text = backend.generate_reply_sync(
+            user_text=text,
+            character=TELEGRAM_CHARACTER,  # Reusing your active Telegram character
+            chat_id=sender_phone,          # Using the phone number to isolate this chat's memory
+            model_choice=TELEGRAM_MODEL,   # Reusing the dynamic Telegram model config
+        )
+
+        print(f"[💬 WHATSAPP] Replied to {sender_phone} as {TELEGRAM_CHARACTER}")
+
+        # Twilio expects an XML response to send the message back to your phone
+        xml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+            <Message>{reply_text}</Message>
+        </Response>"""
+        
+        return xml_response, 200, {'Content-Type': 'text/xml'}
+
+    except Exception as e:
+        print(f"[⚠️ WHATSAPP] Twilio webhook failed:\n{traceback.format_exc()}")
+        return "<Response></Response>", 500, {'Content-Type': 'text/xml'}
 # ══════════════════════════════════════════════════════════════════
 # CORE CHAT — STREAMING SSE
 # Mirrors Tkinter's on_chunk() live token updates.
