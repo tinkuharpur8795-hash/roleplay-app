@@ -23,7 +23,8 @@
       document.documentElement.classList.toggle('mc-authed', authed);
     })();
   </script>
-  <title>AI Character Roleplay</title>
+  <title>TalkBot</title>
+  <link rel="icon" type="image/png" href="TalkBot.png">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
@@ -172,7 +173,8 @@
     <section id="main" class="main-container" aria-label="Chat area">
 
       <!-- ACTIVE STATE BAR -->
-      <div class="active-bar-left">
+      <div id="active-bar" class="active-bar">
+        <div class="active-bar-left">
           <img id="active-bar-avatar" class="active-bar-avatar" src="" alt="" />
           <span class="active-bar-dot"></span>
           <span class="active-bar-label">Character:</span>
@@ -188,6 +190,15 @@
               </div>
           </div>
         </div>
+
+        <!-- This right-side block was accidentally deleted -->
+        <div id="active-bar-right" class="active-bar-right">
+          <span class="active-bar-label">Model:</span>
+          <select id="model-select" class="active-model-select" aria-label="Select AI Model"></select>
+        </div>
+        <button id="active-bar-menu-btn" class="active-bar-menu-btn" type="button"
+                aria-label="More options" aria-haspopup="true" aria-expanded="false">&#8942;</button>
+      </div>
 
       <!-- CHAT DISPLAY -->
       <div id="chat-display" class="chat-display" role="log" aria-live="polite" aria-label="Chat messages">
