@@ -1740,21 +1740,88 @@ html.mc-authed #app.hidden {
 /* Model select lives in the top bar now (moved out of the sidebar to
    keep the sidebar's height identical to home.html's). Styled to look
    like the plain label it replaced. */
+/* Update the existing .active-model-select block to be darker and bolder */
 .active-model-select {
   appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
+  background: #000000; /* Dark background */
+  border: 1px solid var(--border-ctrl);
+  border-radius: var(--radius-md);
+  color: #ffffff; /* Bright text for contrast */
   font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 700; /* Bolder */
   max-width: 260px;
   cursor: pointer;
+  padding: 4px 8px;
+  outline: none;
 }
 
 .active-model-select:hover,
 .active-model-select:focus {
+  border-color: var(--border-focus);
+}
+
+/* --- NEW: Character Chat Dropdown --- */
+.char-chat-dropdown-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease;
+}
+
+.char-chat-dropdown-wrapper:hover {
+  background: var(--bg-hover);
+}
+
+.char-chat-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  z-index: 1000;
+  min-width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.char-chat-dropdown-item {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.char-chat-dropdown-item:hover {
+  background: var(--bg-hover-deep);
+  border-color: var(--border-ctrl);
+}
+
+.char-chat-dropdown-item .chat-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* =============================================
@@ -2405,12 +2472,14 @@ html.mc-authed #app.hidden {
   color: var(--text-muted);
   display: -webkit-box;
   -webkit-line-clamp: 4;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .charpanel-desc.expanded {
   -webkit-line-clamp: unset;
+  line-clamp: 2;
   overflow: visible;
 }
 

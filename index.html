@@ -59,7 +59,11 @@
     <div id="sidebar-wrap" class="sidebar-wrap">
       <aside id="sidebar" class="sidebar" aria-label="Sidebar">
         <div class="sidebar-inner">
-          <div class="brand">MultiChat AI</div>
+          <div class="brand" style="display: flex; align-items: center; gap: 10px;">
+          
+          <img src="/static/TalkBot.png" alt="TalkBot Logo" style="width: 28px; height: 28px; border-radius: 8px;">
+          TalkBot
+        </div>
 
           <!-- Identical markup/classes/dimensions to home.html's sidebar —
                this is what makes switching pages read as one persistent
@@ -168,20 +172,22 @@
     <section id="main" class="main-container" aria-label="Chat area">
 
       <!-- ACTIVE STATE BAR -->
-      <div id="active-bar" class="active-bar">
-        <div class="active-bar-left">
+      <div class="active-bar-left">
           <img id="active-bar-avatar" class="active-bar-avatar" src="" alt="" />
           <span class="active-bar-dot"></span>
           <span class="active-bar-label">Character:</span>
-          <span id="active-char-name" class="active-bar-value">—</span>
+          
+          <!-- NEW: Character Name Dropdown Wrapper -->
+          <div class="char-chat-dropdown-wrapper" id="char-chat-toggle" title="View past chats with this character">
+              <span id="active-char-name" class="active-bar-value" style="text-decoration: underline; text-underline-offset: 4px;">—</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              
+              <!-- Dropdown Menu -->
+              <div id="char-chat-dropdown" class="char-chat-dropdown-menu hidden">
+                  <!-- Specific character's chats will load here dynamically -->
+              </div>
+          </div>
         </div>
-        <div id="active-bar-right" class="active-bar-right">
-          <span class="active-bar-label">Model:</span>
-          <select id="model-select" class="active-model-select" aria-label="Select AI Model"></select>
-        </div>
-        <button id="active-bar-menu-btn" class="active-bar-menu-btn" type="button"
-                aria-label="More options" aria-haspopup="true" aria-expanded="false">&#8942;</button>
-      </div>
 
       <!-- CHAT DISPLAY -->
       <div id="chat-display" class="chat-display" role="log" aria-live="polite" aria-label="Chat messages">

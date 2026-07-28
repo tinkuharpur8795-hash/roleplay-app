@@ -504,6 +504,7 @@
         text-shadow: 0 1px 3px rgba(0,0,0,0.6);
         display: -webkit-box;
         -webkit-line-clamp: 2;
+        line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
         pointer-events: auto;
@@ -905,7 +906,10 @@
     </button>
 
     <aside class="sidebar">
-        <div class="brand">MultiChat AI</div>
+        <div class="brand" style="display: flex; align-items: center; gap: 10px;">
+            <img src="/images/TalkBot.png" alt="TalkBot Logo" style="width: 28px; height: 28px; border-radius: 8px;">
+            TalkBot
+        </div>
         <nav class="nav-list">
             <button class="nav-item active" data-view="characters">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>

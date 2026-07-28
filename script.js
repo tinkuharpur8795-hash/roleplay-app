@@ -50,6 +50,8 @@ const chatsDrawer          = document.getElementById('chats-drawer');
 const chatsDrawerBackdrop  = document.getElementById('chats-drawer-backdrop');
 const chatsDrawerCloseBtn  = document.getElementById('chats-drawer-close');
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
+const charChatToggle   = document.getElementById('char-chat-toggle');
+const charChatDropdown = document.getElementById('char-chat-dropdown');
 
 function openChatsDrawer() {
   chatsDrawer.classList.remove('hidden');
@@ -1964,7 +1966,69 @@ function attachEventListeners() {
       .finally(() => isSending = false);
     }
   });
+  // --- CHARACTER CHAT DROPDOWN ---
+  if (charChatToggle && charChatDropdown) {
+    charChatToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = charChatDropdown.classList.toggle('hidden');
 
+      if (!isHidden) {
+        const character = charSelect.value; 
+
+        if (!character || character === '—') {
+          charChatDropdown.innerHTML = `<div style="padding: 10px; color: var(--text-muted); font-size: 12px; text-align: center;">No character selected</div>`;
+          return;
+        }
+
+        charChatDropdown.innerHTML = `<div style="padding: 10px; color: var(--text-muted); font-size: 12px; text-align: center;">Loading chats...</div>`;
+
+        // Fetch specifically filtered list via backend route
+        fetch('/chat_list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ character: character })
+        })
+        .then(r => r.json())
+        .then(chats => {
+          charChatDropdown.innerHTML = "";
+          if (!chats || chats.length === 0) {
+            charChatDropdown.innerHTML = `<div style="padding: 10px; color: var(--text-muted); font-size: 12px; text-align: center;">No chat history found</div>`;
+            return;
+          }
+
+          // Use your existing formatChatDate and escapeHtml utilities
+          chats.forEach(chat => {
+            const btn = document.createElement("button");
+            btn.className = "char-chat-dropdown-item";
+            const dateStr = chat.last_activity ? formatChatDate(chat.last_activity) : "";
+
+            btn.innerHTML = `
+              <strong>${escapeHtml(chat.title || "Chat " + chat.chat_id)}</strong>
+              <span class="chat-date">${escapeHtml(chat.preview || "No messages yet")} • ${dateStr}</span>
+            `;
+
+            btn.addEventListener("click", () => {
+              // Loads the selected chat without refreshing the page
+              loadChat(chat.path); 
+              charChatDropdown.classList.add("hidden");
+            });
+
+            charChatDropdown.appendChild(btn);
+          });
+        })
+        .catch(() => {
+          charChatDropdown.innerHTML = `<div style="padding: 10px; color: #E5675F; font-size: 12px; text-align: center;">Failed to load chats</div>`;
+        });
+      }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!charChatToggle.contains(e.target)) {
+        charChatDropdown.classList.add('hidden');
+      }
+    });
+  }
   // --- SIDEBAR CONTROLS ---
   newChatBtn.addEventListener('click', handleNewChat);
   delChatBtn.addEventListener('click', showConfirmModal);
