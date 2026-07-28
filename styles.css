@@ -1652,7 +1652,9 @@ html.mc-authed #app.hidden {
   background: #050505;
   border-bottom: 1px solid var(--border-strong);
   gap: 12px;
-  overflow: hidden;
+  overflow: visible; 
+  z-index: 100;
+  position: relative; 
 }
 
 .active-bar-left {
@@ -1737,44 +1739,37 @@ html.mc-authed #app.hidden {
   background: var(--bg-hover);
 }
 
-/* Model select lives in the top bar now (moved out of the sidebar to
-   keep the sidebar's height identical to home.html's). Styled to look
-   like the plain label it replaced. */
-/* Update the existing .active-model-select block to be darker and bolder */
+/* Reverted to a clean, plain-text look */
 .active-model-select {
   appearance: none;
-  background: #000000; /* Dark background */
-  border: 1px solid var(--border-ctrl);
-  border-radius: var(--radius-md);
-  color: #ffffff; /* Bright text for contrast */
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 700; /* Bolder */
+  font-weight: 400;
   max-width: 260px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 0;
   outline: none;
 }
 
 .active-model-select:hover,
 .active-model-select:focus {
-  border-color: var(--border-focus);
+  color: var(--text-primary);
 }
 
-/* --- NEW: Character Chat Dropdown --- */
+/* --- Character Chat Dropdown --- */
 .char-chat-dropdown-wrapper {
   position: relative;
   display: inline-flex;
   align-items: center;
   cursor: pointer;
-  gap: 6px;
-  padding: 2px 6px;
-  border-radius: var(--radius-md);
-  transition: background 0.15s ease;
 }
 
-.char-chat-dropdown-wrapper:hover {
-  background: var(--bg-hover);
+/* Add a subtle text fade on hover instead of a background box */
+.char-chat-dropdown-wrapper:hover #active-char-name {
+  opacity: 0.8;
 }
 
 .char-chat-dropdown-menu {
@@ -1796,6 +1791,7 @@ html.mc-authed #app.hidden {
   gap: 4px;
 }
 
+/* Keep the dropdown items styled so they are readable when opened */
 .char-chat-dropdown-item {
   padding: 10px 14px;
   border-radius: var(--radius-md);
@@ -1823,7 +1819,6 @@ html.mc-authed #app.hidden {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 /* =============================================
    SHOW THOUGHTS TOGGLE
    ============================================= */
