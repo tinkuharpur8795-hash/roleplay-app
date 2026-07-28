@@ -1032,6 +1032,18 @@ def chat_poll_status():
         return jsonify({"status": "error", "message": job["error"]})
     return jsonify({"status": "done", "reply": job["reply"]})
 
+@app.route('/debug/last_prompt', methods=['GET'])
+def get_last_prompt():
+    """Exposes the debug_last_prompt.json file directly to the browser."""
+    prompt_file = os.path.join(backend.BASE_DIR, "debug_last_prompt.json")
+    
+    if os.path.exists(prompt_file):
+        return send_file(prompt_file, mimetype='application/json')
+    else:
+        return jsonify({
+            "error": "debug_last_prompt.json not found.", 
+            "hint": "Make sure backend.debug_mode is True and you have sent at least one message."
+        }), 404
 
 # ══════════════════════════════════════════════════════════════════
 # UTILITY ACTIONS
