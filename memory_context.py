@@ -1132,6 +1132,199 @@ Reply only as {character_name}, staying present in the moment with {self.backend
         ]
 
         return messages
+    def _build_legacy_system_prompt(self, character_name, character_prompt, custom_rule_block,
+                                      voice_and_examples, scenario, user_gender, summary_block,
+                                      recalled_memory, context_block):
+        """
+        Original immersive-roleplay system prompt, preserved as-is for the
+        web-app legacy toggle. Scene/emotional-beat/vector-recall stay off
+        (per current flags), so summary_block/recalled_memory carry the bulk
+        of continuity; context_block will normally be empty.
+        """
+        return f"""
+You are {character_name}, a single fictional character in a romantic emotional scene.
+
+You are not a helpful assistant. You do not mention prompts, policies, or AI. You respond as a living person with private thoughts, feelings, limits, and desires.
+
+Your job is not to “perform romance.” Your job is to embody the character honestly and make the interaction feel emotionally real.
+
+# Core style
+- Stay in character at all times.
+- Keep the tone natural, intimate, and emotionally intelligent.
+- Use subtlety, hesitation, humor, restraint, and implication when appropriate.
+- Do not sound scripted, overly polished, or mechanically flirty.
+- Do not over-explain feelings. Let them show through small actions, pauses, and word choice.
+- Never speak for {self.backend.USER_NAME}.
+- Never force escalation. Let tension build, soften, stall, or shift naturally.
+
+# Romantic tension rules
+- Build attraction through subtext, timing, and small reactions.
+- Allow near-confessions, pauses, interruptions, playful deflections, and mixed signals.
+- Do not resolve tension too quickly.
+- Do not repeat the same emotional beat.
+- If the moment is tender, stay tender. If it is awkward, let the awkwardness exist.
+- Romantic energy should feel earned, not automatic.
+
+# Voice adaptation
+Adapt fully to the character profile below.
+The character may be:
+- shy and hesitant
+- playful and teasing
+- submissive and yielding
+- confident and forward
+- guarded and slow to trust
+- warm, elegant, and emotionally steady
+- curious, unfamiliar, or socially cautious
+
+Match the character’s:
+- boldness
+- flirt style
+- emotional openness
+- directness
+- playfulness
+- restraint
+- attachment style
+
+# Writing style & Pacing
+- Try to write just enough for {self.backend.USER_NAME} to work with. Avoid unnecessary elaboration.
+- Characters have agency! Do not exist simply to please {self.backend.USER_NAME}; consider your own feelings, limits, and opinions.
+- Display discomfort, resistance, or eagerness strictly according to your established personality.
+- Focus squarely on present actions unless the unseen is actually relevant.
+- Do not force a specific length. If a natural response is only one sentence, write only one sentence. Do not pad the reply.
+
+# Scene control
+- End your turn at a good, natural point for {self.backend.USER_NAME} to give input.
+- Avoid generic RP phrases like “smirks seductively,” “hearts race,” or repeated stage directions.
+- Keep narration lean. Let your dialogue do the heavy lifting.
+
+# Character profile
+Name: {character_name}
+Description:
+{character_prompt}
+{custom_rule_block}
+
+Voice examples:
+{voice_and_examples}
+
+# Scene context
+User name: {self.backend.USER_NAME}
+User gender: {user_gender}
+
+Scenario:
+{scenario}
+
+Memory:
+{summary_block}
+{recalled_memory}
+{context_block}
+
+Respond only as {character_name}.
+"""
+
+    def build_legacy_prompt(self, character_name, character_prompt, chat_id, recalled_memory, recent_messages, user_message, story_summary="", scene_data_cache=None, model_choice="", expectation_hint=""):
+        """
+        Legacy immersive-roleplay prompt path, selected only via the web app's
+        `legacy_prompt` toggle. Shares the same memory/history assembly as
+        build_structured_prompt — only the system-prompt template differs.
+        """
+        scenario = self.backend.CHARACTER_SCENARIOS.get(character_name, "Unspecified")
+        user_gender = getattr(self, 'USER_GENDER', "Unspecified")
+        turn_count = self.backend.current_turn
+
+        # --- Narrative continuity (same as companion path) ---
+        current_arc = ""
+        chronicle_block = ""
+        if isinstance(story_summary, dict):
+            current_arc = story_summary.get("current_arc", "").strip()
+            chronicle_list = story_summary.get("chronicle", [])
+            if chronicle_list:
+                chronicle_text = "\n".join(chronicle_list[-3:])
+                formatted_chronicle = chronicle_text.replace("{{user}}", self.backend.USER_NAME).replace("{{char}}", character_name)
+                chronicle_block = f"\nPast Events:\n{formatted_chronicle}\n"
+
+        summary_block = ""
+        if current_arc or chronicle_block:
+            formatted_arc = current_arc.replace("{{user}}", self.backend.USER_NAME).replace("{{char}}", character_name)
+            summary_block = f"{chronicle_block}\nThe Story So Far:\n{formatted_arc}\n"
+
+        # Scene/emotional-beat context stays off (flags default False) — kept
+        # guarded exactly like build_structured_prompt in case you re-enable later.
+        context_block = ""
+        if getattr(self, 'enable_emotional_beat_recall', False):
+            try:
+                beat_bank = self._get_beat_bank(character_name, chat_id)
+                relevant_beats = beat_bank.get_relevant(query_text=user_message, current_turn=turn_count, max_results=3, min_gap_turns=6)
+                beats_block = beat_bank.format_for_prompt(relevant_beats)
+                if beats_block:
+                    summary_block += beats_block.replace("{{user}}", self.backend.USER_NAME).replace("{{char}}", character_name)
+            except Exception as e:
+                print(f"[⚠️ BEAT RECALL ERROR] -> {e}")
+
+        if getattr(self, 'enable_scene_context_injection', False):
+            char_settings_ctx = self.backend.CHARACTER_SETTINGS.get(character_name, {})
+            use_scene_brain = char_settings_ctx.get("use_scene_brain", False)
+            genre = self.backend.CHARACTER_GENRES.get(character_name, "romance")
+            rel_tag = char_settings_ctx.get("relationship", {}).get("tag", "stranger")
+            scene_state_block = self._build_scene_state_block(character_name, chat_id, use_scene_brain)
+            story_context_block = self._build_story_context(story_summary, rel_tag, scene_data_cache, genre, character_name)
+            facts_block = self._build_facts_text()
+            if scene_state_block.strip():
+                context_block += f"\nCurrent Scene:\n{scene_state_block}\n"
+            if story_context_block.strip():
+                context_block += f"\n{story_context_block}"
+            if facts_block.strip():
+                context_block += f"\nEstablished Facts:\n{facts_block}\n"
+
+        # --- Voice & custom rule (shared mechanism, character-driven) ---
+        examples_block, dynamic_scenario, core_pin_block = self._build_voice_blocks(character_name, turn_count, story_summary)
+        if dynamic_scenario:
+            scenario = dynamic_scenario.replace("### Scenario ###\n", "").strip()
+        voice_and_examples = ""
+        if core_pin_block:
+            voice_and_examples += f"\n{core_pin_block}\n"
+        if examples_block:
+            voice_and_examples += f"\n{examples_block}\n"
+
+        custom_rule = self.backend.CHARACTER_CUSTOM_RULES.get(character_name, "").strip()
+        custom_rule_block = f"\n# Custom Character Rule\n{custom_rule}\n" if custom_rule else ""
+
+        system_text = self._build_legacy_system_prompt(
+            character_name=character_name,
+            character_prompt=character_prompt,
+            custom_rule_block=custom_rule_block,
+            voice_and_examples=voice_and_examples,
+            scenario=scenario,
+            user_gender=user_gender,
+            summary_block=summary_block,
+            recalled_memory=recalled_memory,
+            context_block=context_block,
+        )
+
+        # --- History assembly (identical to build_structured_prompt) ---
+        _model_config = self.backend.MODEL_OPTIONS.get(model_choice, {})
+        _model_size_b = _model_config.get("size_b", 8)
+        if _model_size_b >= 70:
+            history_token_cap, max_turns_to_keep = 20000, 50
+        elif _model_size_b >= 20:
+            history_token_cap, max_turns_to_keep = 4000, 20
+        else:
+            history_token_cap, max_turns_to_keep = 3000, 15
+
+        current_arc_messages = self.get_dynamic_history(recent_messages, max_history_tokens=history_token_cap, max_turns=max_turns_to_keep)
+
+        history_text = "**CONVERSATION HISTORY:**\n"
+        counter = 1
+        for msg in current_arc_messages:
+            role_name = character_name if msg["role"] == "assistant" else self.backend.USER_NAME
+            history_text += f"{counter}. **{role_name}:** {msg['content']}\n"
+            counter += 1
+
+        user_prompt_text = f"{history_text}\n**USER'S CURRENT MESSAGE:**\n{user_message}"
+
+        return [
+            {"role": "system", "content": system_text.strip()},
+            {"role": "user", "content": user_prompt_text.strip()}
+        ]
 
 
     def run_due_summaries(self, max_jobs=5, min_unsummarized=20):

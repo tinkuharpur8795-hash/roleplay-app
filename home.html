@@ -1081,7 +1081,16 @@
                 <span class="settings-label">Est. Tokens Used</span>
                 <span class="settings-value" id="s-tokens">—</span>
             </div>
-
+            <!-- Inside the <div class="modal-body"> of the settings modal -->
+            <div class="settings-thoughts-row" style="border-top: none; padding-top: 0; margin-top: 0;">
+                <span class="settings-thoughts-label">Immersive Roleplay Mode</span>
+                <button id="legacy-toggle" class="thoughts-toggle-btn" aria-pressed="false" title="Toggle Immersive Roleplay Mode">
+                    <span class="toggle-track">
+                        <span class="toggle-thumb"></span>
+                    </span>
+                    <span class="toggle-label" id="legacy-label">Off</span>
+                </button>
+            </div>    
             <div class="settings-thoughts-row">
                 <span class="settings-thoughts-label">Show AI Internal Thoughts</span>
                 <button id="thoughts-toggle" class="thoughts-toggle-btn" aria-pressed="false" title="Toggle AI thought visibility">
@@ -1710,6 +1719,25 @@
     const settingsCloseBtn = document.getElementById('settings-modal-close-btn');
     const thoughtsToggle   = document.getElementById('thoughts-toggle');
     const thoughtsLabel    = document.getElementById('thoughts-label');
+    const legacyToggle = document.getElementById('legacy-toggle');
+    const legacyLabel  = document.getElementById('legacy-label');
+
+    function setLegacyUI(enabled) {
+        if (!legacyToggle) return;
+        legacyToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        legacyToggle.classList.toggle('toggle-on', enabled);
+        legacyLabel.textContent = enabled ? 'On' : 'Off';
+        sessionStorage.setItem('use_legacy_prompt', enabled ? '1' : '0');
+    }
+    
+    if (legacyToggle) {
+        legacyToggle.addEventListener('click', () => {
+            const current = legacyToggle.getAttribute('aria-pressed') === 'true';
+            setLegacyUI(!current);
+        });
+        // Initialize the UI based on saved session state
+        setLegacyUI(sessionStorage.getItem('use_legacy_prompt') === '1');
+    }
 
     function setThoughtsUI(enabled) {
         thoughtsToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');

@@ -30,6 +30,8 @@ const settingsModal   = document.getElementById('settings-modal');
 const settingsClose   = document.getElementById('settings-close');
 const thoughtsToggle  = document.getElementById('thoughts-toggle');
 const thoughtsLabel   = document.getElementById('thoughts-label');
+const legacyToggle = document.getElementById('legacy-toggle');
+const legacyLabel  = document.getElementById('legacy-label');
 const logPanel        = document.getElementById('log-panel');
 const logOutput       = document.getElementById('log-output');
 const logStatus       = document.getElementById('log-status');
@@ -1258,10 +1260,9 @@ async function streamBotReply(userText, targetEl, cursor) {
     const response = await fetch('/chat', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ message: userText, character, model }),
+      body:    JSON.stringify({ message: userText, character, model, legacy_prompt: isLegacy }),
       signal:  abortController.signal
     });
-
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -1364,6 +1365,8 @@ async function streamBotReply(userText, targetEl, cursor) {
 async function streamAction(endpoint, payloadData, targetEl, cursor, parentEl = null) {
   let accumulatedText = '';
   abortController     = new AbortController();
+
+  payloadData.legacy_prompt = sessionStorage.getItem('use_legacy_prompt') === '1';
 
   try {
     const response = await fetch(endpoint, {
@@ -2042,6 +2045,14 @@ function attachEventListeners() {
   // --- THOUGHTS TOGGLE ---
   thoughtsToggle.addEventListener('click', handleThoughtsToggle);
 
+  if (legacyToggle) {
+    legacyToggle.addEventListener('click', () => {
+      const current = legacyToggle.getAttribute('aria-pressed') === 'true';
+      setLegacyUI(!current);
+    });
+    setLegacyUI(sessionStorage.getItem('use_legacy_prompt') === '1');
+  }
+
   // --- SHARED SIDEBAR NAV ---
   // Characters/Create/Edit hand off to home.html's views — character
   // selection lives there now, not in a dropdown on this page.
@@ -2139,6 +2150,13 @@ function setThoughtsUI(enabled) {
   thoughtsToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
   thoughtsToggle.classList.toggle('toggle-on', enabled);
   thoughtsLabel.textContent = enabled ? 'On' : 'Off';
+}
+function setLegacyUI(enabled) {
+  if (!legacyToggle) return;
+  legacyToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  legacyToggle.classList.toggle('toggle-on', enabled);
+  legacyLabel.textContent = enabled ? 'On' : 'Off';
+  sessionStorage.setItem('use_legacy_prompt', enabled ? '1' : '0');
 }
 
 function handleThoughtsToggle() {
