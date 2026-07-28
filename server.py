@@ -670,14 +670,12 @@ def cron_summarize():
         print(f"[⏱️ CRON] Summary sweep — checked: {result['checked']}, "
               f"summarized: {len(result['summarized'])}, errors: {len(result['errors'])}")
         
-        # Truncate errors to guarantee we stay under the 64 KB size limit
-        safe_errors = [str(err)[:100] + "..." for err in result.get('errors', [])]
+        safe_errors = [str(err)[:80] + "..." for err in result.get('errors', [])]
         result['errors'] = safe_errors
-        
-        return jsonify({"status": "ok", **result})
+        return jsonify({"status": "ok", **result}), 200
     except Exception as e:
         print(f"[⚠️ CRON SUMMARIZE] failed:\n{traceback.format_exc()}")
-        return jsonify({"status": "error", "message": str(e)[:200]}), 500
+        return jsonify({"status": "error", "message": str(e)[:150]}), 200
 # ══════════════════════════════════════════════════════════════════
 # TELEGRAM MORNING MESSAGE — externally cron-triggered proactive ping.
 # Point cron-job.org (or any external scheduler) at this daily:
@@ -747,7 +745,7 @@ def cron_proactive_check():
     model     = request.args.get("model", list(backend.MODEL_OPTIONS.keys())[0])
 
     if not character or not chat_id:
-        return jsonify({"status": "error", "message": "character and chat_id are required."}), 400
+        return jsonify({"status": "error", "message": "character and chat_id are required."}), 200
 
     try:
         due = backend.check_and_send_due_proactive_messages(character, chat_id, model)
@@ -755,21 +753,17 @@ def cron_proactive_check():
         for kind, text in due:
             sent = send_telegram_message(text)
             print(f"[🔔 PROACTIVE] {kind} for {character}/{chat_id} — Telegram sent: {sent}")
-            
-            # Truncate generated text to guarantee we stay under the 64 KB size limit
-            safe_text = text[:100] + "..." if len(text) > 100 else text
+            safe_text = text[:80] + "..." if len(text) > 80 else text
             results.append({"kind": kind, "sent": sent, "text": safe_text})
-            
-        return jsonify({"status": "ok", "fired": results})
+        return jsonify({"status": "ok", "fired": results}), 200
         
     except ValueError as ve:
-        # Gracefully handle missing database records without crashing
         print(f"[⚠️ PROACTIVE] Skipped: {ve}")
-        return jsonify({"status": "skipped", "message": str(ve)[:100]}), 200
+        return jsonify({"status": "skipped", "message": str(ve)[:120]}), 200
         
     except Exception as e:
         print(f"[⚠️ PROACTIVE] cron_proactive_check() failed:\n{traceback.format_exc()}")
-        return jsonify({"status": "error", "message": str(e)[:200]}), 500
+        return jsonify({"status": "error", "message": str(e)[:150]}), 200
 # ══════════════════════════════════════════════════════════════════
 # TELEGRAM WEBHOOK — two-way chat via Telegram, bypassing the web app.
 # Register the webhook ONCE (not called by your app — just a one-off

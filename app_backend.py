@@ -1920,9 +1920,13 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         due = []
         changed = False
         
-        # Pull only the updated_at field from the DB to keep the cron lightweight
+        # Flex query: check both int and str chat_id to prevent type mismatches
         db = get_db()
-        chat_doc = db.chats.find_one({"character": character, "chat_id": int(chat_id)}, {"updated_at": 1})
+        chat_id_val = int(chat_id) if str(chat_id).isdigit() else chat_id
+        chat_doc = db.chats.find_one(
+            {"character": character, "$or": [{"chat_id": chat_id_val}, {"chat_id": str(chat_id)}]},
+            {"updated_at": 1}
+        )
 
         for kind, info in entry["kinds"].items():
             if info["sent"]:
@@ -1967,7 +1971,11 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             raise ValueError(f"Unknown character: {character}")
 
         db = get_db()
-        chat_data = db.chats.find_one({"character": character, "chat_id": int(chat_id)})
+        chat_id_val = int(chat_id) if str(chat_id).isdigit() else chat_id
+        chat_data = db.chats.find_one({
+            "character": character,
+            "$or": [{"chat_id": chat_id_val}, {"chat_id": str(chat_id)}]
+        })
         
         if not chat_data:
             raise ValueError(f"No chat record found in DB for {character}/{chat_id}")
