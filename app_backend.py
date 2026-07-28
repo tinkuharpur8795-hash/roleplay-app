@@ -2240,20 +2240,20 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         self.cancel_flag.set()
         print("[⏹️ INTERRUPT] Cancel signal sent!")
 
-    def generate_reply(self, user_text, character, model_choice, on_chunk, on_complete, on_error):
+    def generate_reply(self, user_text, character, model_choice, on_chunk, on_complete, on_error, use_legacy=False):
         import time
         t_start = time.time()
         print("\n" + "="*40)
         print("=== 🚀 STARTING NEW TURN DIAGNOSTICS ===")
         print("="*40)
-        print(f"[DIAG 1] User clicked send: 0.000s")
+        
 
         try:
-            print("[DIAG 2] Writing to USER_MESSAGES_LOG...")
+           
             with open(self.USER_MESSAGES_LOG, "a", encoding="utf-8") as f:
                 f.write(user_text + "\n")
 
-            print("[DIAG 3] Fetching basic chat properties...")
+            
             chat_id = self.CURRENT_CHAT.get("chat_id", "default")
             char_prompt = self.CHARACTERS.get(character, "")
             char_settings = self.CHARACTER_SETTINGS.get(character, {})
@@ -2261,13 +2261,13 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             cid = self.CHARACTER_IDS.get(character, "unknown")
             recent_history = self.CURRENT_CHAT.get("messages", [])
 
-            print("[DIAG 4] Fetching scene file path...")
+           
             scene_file = self.advanced_memory.get_scene_file(character, chat_id)
 
-            print("[DIAG 5] Calling advanced_memory.load_summary()... (WAITING ON DISK/LOCK?)")
+           
             summary_data = self.advanced_memory.load_summary(cid, chat_id)
 
-            print("[DIAG 6] Accessing ram_scene_cache...")
+           
             scene_data_cache = self.ram_scene_cache or {}
 
             t_disk = time.time()
@@ -2278,17 +2278,17 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 recalled_memory = self._prefetched_memory or ""
                 self._prefetched_memory = None
 
-            print(f"[DIAG 9] Checking enable_vector_recall flag...")
+            
             if getattr(self, 'enable_vector_recall', False) and not recalled_memory:
                 print("[DIAG 10] Running retrieve_relevant_memory()...")
                 recalled_memory = self.retrieve_relevant_memory(recent_history, user_text, character, chat_id)
 
-            print("[DIAG 11] Checking time gap...")
+            
             last_updated_ts = self.CURRENT_CHAT.get("updated_at")
             last_msg_dt = datetime.fromtimestamp(last_updated_ts, tz=IST) if last_updated_ts else None
             time_gap_hint = self._describe_time_gap(last_msg_dt) if last_msg_dt else ""
 
-            print("[DIAG 12] Checking expectation trigger...")
+            
             expectation_hint = ""
             try:
                 expectation_hint = self.expectations.check_expectation_trigger(
@@ -2308,21 +2308,35 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 "max_tokens": char_settings.get("max_tokens", 650)
             }
 
-            print("[DIAG 13] Calling build_structured_prompt()...")
-            full_prompt_messages = self.build_structured_prompt(
-                character_name=character,
-                character_prompt=char_prompt,
-                chat_id=chat_id,
-                recalled_memory=recalled_memory,
-                recent_messages=recent_history,
-                user_message=user_text,
-                story_summary=summary_data,
-                scene_data_cache=scene_data_cache,
-                model_choice=model_choice,
-                expectation_hint=expectation_hint
-            )
+            
+            if use_legacy:
+                full_prompt_messages = self.memory_context.build_legacy_prompt(
+                    character_name=character,
+                    character_prompt=char_prompt,
+                    chat_id=chat_id,
+                    recalled_memory=recalled_memory,
+                    recent_messages=recent_history,
+                    user_message=user_text,
+                    story_summary=summary_data,
+                    scene_data_cache=scene_data_cache,
+                    model_choice=model_choice,
+                    expectation_hint=expectation_hint
+                )
+            else:
+                full_prompt_messages = self.build_structured_prompt(
+                    character_name=character,
+                    character_prompt=char_prompt,
+                    chat_id=chat_id,
+                    recalled_memory=recalled_memory,
+                    recent_messages=recent_history,
+                    user_message=user_text,
+                    story_summary=summary_data,
+                    scene_data_cache=scene_data_cache,
+                    model_choice=model_choice,
+                    expectation_hint=expectation_hint
+                )
 
-            print("[DIAG 14] Prompt built successfully! Writing to debug_last_prompt.json...")
+            
 
             if self.debug_mode:
                 payload_log_path = os.path.join(self.BASE_DIR, "debug_last_prompt.json")
@@ -2333,7 +2347,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                     daemon=True
                 ).start()
 
-            print("[DIAG 15] Passing payload to API...")
+            
 
             new_turn_id = self.current_turn + 1
             self.CURRENT_CHAT["messages"].append({"role": "user", "content": user_text, "turn_id": new_turn_id})

@@ -867,6 +867,8 @@ def chat():
     character = data.get("character", "")
     model     = data.get("model", list(backend.MODEL_OPTIONS.keys())[0])
 
+    use_legacy = data.get("legacy_prompt", False)
+
     # 1. ADD BACKPRESSURE: Max 15 chunks in the queue.
     # The fast LLM thread will block if the UI falls behind.
     chunk_queue = queue.Queue(maxsize=15)
@@ -982,6 +984,7 @@ def chat_poll_start():
     user_text = data.get("message", "")
     character = data.get("character", "")
     model     = data.get("model", list(backend.MODEL_OPTIONS.keys())[0])
+    use_legacy = data.get("legacy_prompt", False)
 
     _cleanup_old_poll_jobs()
 
@@ -1011,7 +1014,7 @@ def chat_poll_start():
 
     threading.Thread(
         target=backend.generate_reply,
-        args=(user_text, character, model, on_chunk, on_complete, on_error),
+        args=(user_text, character, model, on_chunk, on_complete, on_error, use_legacy),
         daemon=True
     ).start()
 
@@ -1054,6 +1057,7 @@ def retry():
     data      = request.get_json()
     character = data.get("character", "")
     model     = data.get("model", list(backend.MODEL_OPTIONS.keys())[0])
+    use_legacy = data.get("legacy_prompt", False)
 
     # 1. ADD BACKPRESSURE
     chunk_queue = queue.Queue(maxsize=15)
@@ -1084,7 +1088,7 @@ def retry():
     # Run in background so the generator can drain the queue
     threading.Thread(
         target=backend.regenerate_reply,
-        args=(character, model, on_chunk, on_complete, on_error),
+        args=(character, model, on_chunk, on_complete, on_error, use_legacy),
         daemon=True
     ).start()
 
