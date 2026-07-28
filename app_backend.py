@@ -193,37 +193,15 @@ class RoleplayBackend:
                 "name": "grok-4-1-fast-reasoning",
                 "size_b": 671,
             },
-            "Jiekou claude-sonnet-4-6-r": {
-                "type": "cloud",
-                "provider": "jiekou",  # <--- ADD THIS
-                "name": "claude-sonnet-4-6-r",
-                "size_b": 72,
-            },
-            "Modal Z.ai Serverless": {
-    "type": "cloud",
-    "provider": "modal",
-    "name": "z-ai-custom",
-    "url": "https://tinkuharpur8795--z-ai-service-generate.modal.run",
-    "size_b": 12,
-},
-            "NVIDIA Llama 3.1 70B": {
-                "type": "cloud",
-                "provider": "nvidia",
-                "name": "minimaxai/minimax-m2.7",
-                "size_b": 70,
-            },
+            
+            
             "NVIDIA z ai": {
                 "type": "cloud",
                 "provider": "nvidia",
                 "name": "z-ai/glm-5.2",
                 "size_b": 340,
             },
-            "NVIDIA deepseek": {
-                "type": "cloud",
-                "provider": "nvidia",
-                "name": "deepseek-ai/deepseek-v4-flash",
-                "size_b": 340,
-            },
+            
             "Cloud Mistral Nemo  (Chat)": {
                 "type": "cloud",
                 "provider": "openrouter",
@@ -231,45 +209,16 @@ class RoleplayBackend:
                 "providers": ["DeepInfra"],
                 "size_b": 12,
                 },
-            "Cloud ai21/jamba-large-1.7": {
+            
+            "Cloud qwen/qwen3-235b-a22b-2507": {
                 "type": "cloud",
                 "provider": "openrouter",
-                "name": "ai21/jamba-large-1.7",
-                "providers": ["ai21/fp8"],
+                "name": "qwen/qwen3-235b-a22b-2507",
+                "providers": ["DeepInfra", "novita/fp8"],
                 "size_b": 100,
                 },
-            "Cloud deepseek/deepseek-v3": {
-                "type": "cloud",
-                "provider": "openrouter",
-                "name": "deepseek/deepseek-chat-v3.1",
-                "providers": ["sambanova/high-throughput"],
-                "size_b": 120,
-                },
-
-            "Cloud MythoMax 13B  (Chat)": {
-                "type": "cloud",
-                "provider": "openrouter",
-                "name": "gryphe/mythomax-l2-13b",
-                "providers": ["nextbit/int4"],
-                "size_b": 13,
-                },
-            "Cloud z-ai/glm-4.5-air(Chat)": {
-                "type": "cloud",
-                "provider": "openrouter",
-                "name": "z-ai/glm-4.5-air",
-                "providers": ["z-ai/fp8"],
-                "size_b": 13,
-                },
-
-
-            "llama-3.1-8b-instant  (Chat)": {
-                "type": "cloud", "provider": "groq",
-                "name": "llama-3.1-8b-instant",
-                "size_b": 20,
-                },
-
-
-            # === BACK-END BRAIN MODELS (High Logic, Strict JSON) ===
+         
+           
             "Groq LLaMA 3.3 70B  (Brain)": {
                 "type": "cloud", "provider": "groq",
                 "name": "llama-3.3-70b-versatile",
@@ -278,58 +227,16 @@ class RoleplayBackend:
             "Groq qwen/qwen3.6-27b": {
                 "type": "cloud", "provider": "groq",
                 "name": "qwen/qwen3.6-27b",
-                "size_b": 8, #just for telegram, I am setting wrong size.
+                "size_b": 8, 
                 },
-
-
-            "Groq openai/gpt-oss-120b": {
-                "type": "cloud", "provider": "groq",
-                "name": "openai/gpt-oss-120b",
-                "size_b": 32,
-                },
-
-
-            "Cloud Lunaris 8B  (Brain)": {
-                "type": "cloud", "provider": "openrouter",
-                "name": "sao10k/l3-lunaris-8b",
-                "providers": ["deepinfra/turbo"],
-                "size_b": 8,
-                },
-            "Meganova 8B-Stheno": {
-                "type": "cloud",
-                "provider": "meganova",
-                "name": "Sao10K/L3-8B-Stheno-v3.2",
-                "size_b": 12,
-                },
-
+                        
             "Meganova 70B-Euryale": {
                 "type": "cloud",
                 "provider": "meganova",
                 "name": "Sao10K/L3-70B-Euryale-v2.1",
                 "size_b": 12,
                 },
-
-            "Meganova Nevoria-70b": {
-                "type": "cloud", # Maintain token limits to prevent context overflow
-
-                "provider": "meganova",
-                "name": "Steelskull/L3.3-MS-Nevoria-70b",
-                "size_b": 12,
-                },
-            "Meganova Sapphira-L3.3-70b": {
-                "type": "cloud",
-                "provider": "meganova",
-                "name": "BruhzWater/Sapphira-L3.3-70b-0.1",
-                "size_b": 12,
-                },
-
-            "Bytez latitudeGames ": {
-                "type": "cloud",
-                "provider": "bytez",
-                "name": "LatitudeGames/Wayfarer-2-12B",
-                "size_b": 12,
-                },
-
+         
            "Mistral Mixtral 8x22B": {
                 "type": "cloud",
                 "provider": "mistral",
@@ -342,6 +249,13 @@ class RoleplayBackend:
                 "name": "mistral-large-latest",
                 "size_b": 123,
             },
+            "Mistral Mixtral medium 22B": {
+                "type": "cloud",
+                "provider": "mistral",
+                "name": "mistral-medium-3-5",
+                "size_b": 141, 
+            },
+                            
             "mistral-small-2501": {
                 "type": "cloud",
                 "provider": "mistral",
