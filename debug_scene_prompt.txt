@@ -1,4 +1,0 @@
-=== RAW AI OUTPUT ===
-Error: Jiekou AI API failed: Connection error.
-
-=== LENGTH: 46 characters ===
