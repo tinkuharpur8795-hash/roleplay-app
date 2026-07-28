@@ -1252,6 +1252,7 @@ function removeLastExchange() {
 async function streamBotReply(userText, targetEl, cursor) {
   const character = charSelect.value;
   const model     = modelSelect.value;
+  const isLegacy  = sessionStorage.getItem('use_legacy_prompt') === '1';
 
   let accumulatedText = '';
   abortController     = new AbortController();
