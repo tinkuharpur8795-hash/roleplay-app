@@ -149,6 +149,7 @@ class RoleplayBackend:
         self.CHARACTER_SCENARIOS = {}
         self.CHARACTER_GENRES = {}
         self.CHARACTER_CUSTOM_RULES = {}
+        self.CHARACTER_TYPES = {} 
 
         self.api_clients_cache = {}
         # --- NEW: Global HTTP Client for Connection Pooling ---
