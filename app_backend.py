@@ -2240,7 +2240,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         self.cancel_flag.set()
         print("[⏹️ INTERRUPT] Cancel signal sent!")
 
-    def generate_reply(self, user_text, character, model_choice, on_chunk, on_complete, on_error, use_legacy=False):
+    def generate_reply(self, user_text, character, model_choice, on_chunk, on_complete, on_error):
         import time
         t_start = time.time()
         print("\n" + "="*40)
@@ -2307,10 +2307,11 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 "repetition_penalty": char_settings.get("repetition_penalty", 1.05),
                 "max_tokens": char_settings.get("max_tokens", 650)
             }
+            char_type = self.CHARACTER_TYPES.get(character, "roleplay")
 
             
-            if use_legacy:
-                full_prompt_messages = self.memory_context.build_legacy_prompt(
+            if char_type == "companion":
+                full_prompt_messages = self.memory_context.build_structured_prompt(
                     character_name=character,
                     character_prompt=char_prompt,
                     chat_id=chat_id,
@@ -2323,7 +2324,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                     expectation_hint=expectation_hint
                 )
             else:
-                full_prompt_messages = self.build_structured_prompt(
+                full_prompt_messages = self.memory_context.build_legacy_prompt(
                     character_name=character,
                     character_prompt=char_prompt,
                     chat_id=chat_id,
@@ -2335,7 +2336,6 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                     model_choice=model_choice,
                     expectation_hint=expectation_hint
                 )
-
             
 
             if self.debug_mode:
