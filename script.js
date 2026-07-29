@@ -1834,6 +1834,11 @@ function attachEventListeners() {
     if (action === 'retry') {
       if (!character) return addSystemMessage('⚠️ Select a character first.');
 
+      // BULLETPROOF: Extract the last user message text directly from the UI
+      const userRows = [...chatContainer.querySelectorAll('.user-row')];
+      const lastUserRow = userRows.pop();
+      const uiFallbackText = lastUserRow ? extractRawMessageText(lastUserRow.querySelector('.msg-text')) : '';
+
       // 1. Instantly remove old message from the DOM
       const lastBot = [...chatContainer.querySelectorAll('.bot-row')].pop();
       const lastSep = lastBot?.nextElementSibling;
@@ -1868,15 +1873,13 @@ function attachEventListeners() {
       chatContainer.appendChild(botRow);
       scrollToBottom();
 
-      // 3. Stream the retry
-      streamAction('/retry', { character, model }, botMsgText, cursor)
+      // 3. Stream the retry (Send the UI text as a fallback)
+      streamAction('/retry', { character, model, ui_fallback_text: uiFallbackText }, botMsgText, cursor)
         .finally(() => {
           showTyping(false);
           isSending = false;
         });
-
     }
-
     // UNDO
     if (action === 'undo') {
       fetch('/undo', {

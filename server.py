@@ -1057,14 +1057,34 @@ def retry():
     data      = request.get_json()
     character = data.get("character", "")
     model     = data.get("model", list(backend.MODEL_OPTIONS.keys())[0])
-    
+    ui_fallback_text = data.get("ui_fallback_text", "")
+
+    # BULLETPROOF: Force backend history to match the UI's last user message
+    if ui_fallback_text and getattr(backend, "CURRENT_CHAT", None) is not None:
+        msgs = backend.CURRENT_CHAT.setdefault("messages", [])
+        last_user_idx = -1
+        
+        # Scan backward to find the last user message in memory
+        for i in range(len(msgs) - 1, -1, -1):
+            if msgs[i].get("role") == "user":
+                last_user_idx = i
+                break
+                
+        if last_user_idx == -1:
+            # No user message exists in backend memory! Inject the UI's message safely.
+            if msgs and msgs[-1].get("role") == "assistant":
+                msgs.insert(len(msgs) - 1, {"role": "user", "content": ui_fallback_text})
+            else:
+                msgs.append({"role": "user", "content": ui_fallback_text})
+        else:
+            # Override backend's last user message to exactly match what the UI sees
+            msgs[last_user_idx]["content"] = ui_fallback_text
 
     # 1. ADD BACKPRESSURE
     chunk_queue = queue.Queue(maxsize=15)
-
     # 2. DISCONNECT SIGNAL
     client_disconnected = threading.Event()
-
+    
     def on_chunk(text):
         if client_disconnected.is_set():
             raise InterruptedError("Client disconnected")
