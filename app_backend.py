@@ -186,6 +186,7 @@ class RoleplayBackend:
         self.JIEKOU_KEY = os.getenv("JIEKOU_API_KEY")
         self.COHERE_KEY = os.getenv("COHERE_API_KEY")
         self.PINECONE_KEY = os.getenv("PINECONE_API_KEY")
+        self.MORPH_KEY = os.getenv("MORPH_API_KEY")
         self.MODEL_OPTIONS = {
             # === FRONT-END CHAT MODELS (Creative, Fast, Roleplay-Focused) ===
             "Jiekou grok-4-1-fast-reasoning": {
@@ -274,6 +275,12 @@ class RoleplayBackend:
                 "provider": "cohere",
                 "name": "command-a-03-2025",
                 "size_b": 35,
+            },
+            "Morph MiniMax M3": {
+                "type": "cloud",
+                "provider": "morph",
+                "name": "morph-minimax3-428b",
+                "size_b": 428,
             },
             }
     
@@ -1264,7 +1271,8 @@ Example of a correctly-shaped response (for a totally different idea — invent 
             return self._call_cloud_with_rotation(model_name, messages, settings, locked_providers)
         elif provider == "groq":
             return self._call_groq_with_rotation(model_name, messages, settings)
-
+        elif provider == "morph":  # <--- ADD THIS BLOCK
+            return self._call_morph(model_name, messages, settings)
         elif provider == "meganova":
             return self._call_meganova(model_name, messages, settings)
         elif provider == "google":
@@ -1318,6 +1326,55 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 self.current_groq_index = (self.current_groq_index + 1) % total_apis
 
         yield "Error: All Groq APIs failed or reached their rate limits."
+
+    def _call_morph(self, model_name, messages, settings):
+        if not getattr(self, "MORPH_KEY", None) or not self.MORPH_KEY:
+            yield "Error: MORPH_API_KEY not found in environment (.env)"
+            return
+
+        try:
+            cache_key = "morph_" + self.MORPH_KEY
+            if cache_key not in self.api_clients_cache:
+                self.api_clients_cache[cache_key] = OpenAI(
+                    base_url="https://api.morphllm.com/v1",
+                    api_key=self.MORPH_KEY,
+                    max_retries=0,
+                    http_client=self.http_client
+                )
+            client = self.api_clients_cache[cache_key]
+
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=settings.get("temperature", 0.7),
+                max_tokens=settings.get("max_tokens", 500),
+                top_p=settings.get("top_p", 0.9),
+                stream=True
+            )
+
+            first_token_time = None
+            MAX_GENERATION_TIME = 20.0
+
+            for chunk in response:
+                current_time = time.time()
+
+                # Auto-kill tripwire logic to keep app responsive
+                if first_token_time is None:
+                    first_token_time = current_time
+                elif (current_time - first_token_time) > MAX_GENERATION_TIME:
+                    yield "\n\n[⚠️ AUTO-KILL: Model was too slow. Connection severed.]"
+                    response.close()
+                    break
+
+                # Safely check if delta exists
+                if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    if delta is not None and getattr(delta, 'content', None) is not None:
+                        yield delta.content
+            return
+
+        except Exception as e:
+            yield f"Error: Morph API failed: {e}"
 
     def _call_meganova(self, model_name, messages, settings):
         if not hasattr(self, "MEGANOVA_KEY") or not self.MEGANOVA_KEY:
