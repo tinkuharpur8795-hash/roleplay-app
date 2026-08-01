@@ -1105,17 +1105,21 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 last_assistant_tokens = self._estimate_tokens(msg.get("content", ""))
                 break
 
-        # 5. FLATTEN CONVERSATION HISTORY
-        history_text = "**CONVERSATION HISTORY:**\n"
-        counter = 1
+        # 5. INITIALIZE NATIVE ARRAY WITH SYSTEM PROMPT
+        messages = [
+            {"role": "system", "content": system_text.strip()}
+        ]
+
+        # 6. APPEND HISTORY AS NATIVE OBJECTS
         for msg in current_arc_messages:
-            role_name = character_name if msg["role"] == "assistant" else self.backend.USER_NAME
-            history_text += f"{counter}. **{role_name}:** {msg['content']}\n"
-            counter += 1
+            messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
 
-        # 6. APPEND CURRENT MESSAGE AND DYNAMIC BRAKE
-        user_prompt_text = f"{history_text}\n**USER'S CURRENT MESSAGE:**\n{user_message}"
-
+        # 7. APPEND CURRENT MESSAGE AND DYNAMIC BRAKE
+        final_user_text = user_message
+        
         # If the LLM rambled last turn, inject the hard constraint at the VERY BOTTOM.
         if last_assistant_tokens > 250:
             dynamic_brake = (
@@ -1123,13 +1127,12 @@ Reply only as {character_name}, staying present in the moment with {self.backend
                 "write JUST ENOUGH for the user to respond to. Avoid all unnecessary elaboration. "
                 "Do NOT pad the text to fill space. Say what you need to say, then stop.]"
             )
-            user_prompt_text += dynamic_brake
+            final_user_text += dynamic_brake
 
-        # 7. FINAL ASSEMBLY
-        messages = [
-            {"role": "system", "content": system_text.strip()},
-            {"role": "user", "content": user_prompt_text.strip()}
-        ]
+        messages.append({
+            "role": "user",
+            "content": final_user_text.strip()
+        })
 
         return messages
     def _build_legacy_system_prompt(self, character_name, character_prompt, custom_rule_block,
@@ -1312,20 +1315,22 @@ Respond only as {character_name}.
 
         current_arc_messages = self.get_dynamic_history(recent_messages, max_history_tokens=history_token_cap, max_turns=max_turns_to_keep)
 
-        history_text = "**CONVERSATION HISTORY:**\n"
-        counter = 1
-        for msg in current_arc_messages:
-            role_name = character_name if msg["role"] == "assistant" else self.backend.USER_NAME
-            history_text += f"{counter}. **{role_name}:** {msg['content']}\n"
-            counter += 1
-
-        user_prompt_text = f"{history_text}\n**USER'S CURRENT MESSAGE:**\n{user_message}"
-
-        return [
-            {"role": "system", "content": system_text.strip()},
-            {"role": "user", "content": user_prompt_text.strip()}
+        messages = [
+            {"role": "system", "content": system_text.strip()}
         ]
 
+        for msg in current_arc_messages:
+            messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        messages.append({
+            "role": "user",
+            "content": user_message.strip()
+        })
+
+        return messages
 
     def run_due_summaries(self, max_jobs=5, min_unsummarized=20):
         """Cron-safe sweep updated for MongoDB."""
