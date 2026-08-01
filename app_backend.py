@@ -211,14 +211,15 @@ class RoleplayBackend:
                 "providers": ["DeepInfra"],
                 "size_b": 12,
                 },
-            
-            "Cloud qwen/qwen3-235b-a22b-2507": {
+            "Cloud deepseek/deepseek-v4-flash": {
                 "type": "cloud",
                 "provider": "openrouter",
-                "name": "qwen/qwen3-235b-a22b-2507",
-                "providers": ["DeepInfra", "novita/fp8"],
+                "name": "deepseek/deepseek-v4-flash",
+                "providers": ["DeepInfra", "streamlake/fp8"],
                 "size_b": 100,
                 },
+            
+            
          
            
             "Groq LLaMA 3.3 70B  (Brain)": {
