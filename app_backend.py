@@ -1235,36 +1235,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         provider = model_info.get("provider", "openrouter")
         model_name = model_info["name"]
 
-        # ─── INJECT CLAUDE PROMPT CACHE ────────────────────────────
-        # Anthropic charges full price if cache markers aren't explicitly set.
-        if "claude" in model_name.lower():
-            import copy
-            messages = copy.deepcopy(messages)
-
-            # 1. Cache the System Prompt (Saves the most money)
-            if len(messages) > 0 and messages[0]["role"] == "system":
-                if isinstance(messages[0]["content"], str):
-                    messages[0]["content"] = [
-                        {
-                            "type": "text",
-                            "text": messages[0]["content"],
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ]
-
-            # 2. Cache the most recent User message (Caches the chat history)
-            for i in range(len(messages)-1, -1, -1):
-                if messages[i]["role"] == "user":
-                    if isinstance(messages[i]["content"], str):
-                        messages[i]["content"] = [
-                            {
-                                "type": "text",
-                                "text": messages[i]["content"],
-                                "cache_control": {"type": "ephemeral"}
-                            }
-                        ]
-                    break
-        # ───────────────────────────────────────────────────────────
+        
 
         if provider == "openrouter":
             locked_providers = model_info.get("providers", None)
@@ -1762,7 +1733,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
 
                     )
                 temp_client = self.api_clients_cache[cache_key]
-                extra_body = {"seed": random.randint(1, 999999)}
+                extra_body = {}
                 if "repetition_penalty" in settings: extra_body["repetition_penalty"] = settings["repetition_penalty"]
                 if "top_k" in settings: extra_body["top_k"] = settings["top_k"]
 
