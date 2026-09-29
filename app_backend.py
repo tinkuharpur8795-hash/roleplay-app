@@ -189,20 +189,10 @@ class RoleplayBackend:
         self.MORPH_KEY = os.getenv("MORPH_API_KEY")
         self.MODEL_OPTIONS = {
             # === FRONT-END CHAT MODELS (Creative, Fast, Roleplay-Focused) ===
-            "Jiekou grok-4-1-fast-reasoning": {
-                "type": "cloud",
-                "provider": "jiekou",  # <--- ADD THIS
-                "name": "grok-4-1-fast-reasoning",
-                "size_b": 671,
-            },
+
             
             
-            "NVIDIA z ai": {
-                "type": "cloud",
-                "provider": "nvidia",
-                "name": "z-ai/glm-5.2",
-                "size_b": 340,
-            },
+            
             
             "Cloud Mistral Nemo  (Chat)": {
                 "type": "cloud",
@@ -211,13 +201,7 @@ class RoleplayBackend:
                 "providers": ["DeepInfra"],
                 "size_b": 12,
                 },
-            "Cloud deepseek/deepseek-v4-flash": {
-                "type": "cloud",
-                "provider": "openrouter",
-                "name": "deepseek/deepseek-v4-flash",
-                "providers": ["DeepInfra", "streamlake/fp8"],
-                "size_b": 100,
-                },
+            
             
             
          
