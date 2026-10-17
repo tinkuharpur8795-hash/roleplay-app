@@ -1517,111 +1517,8 @@ Example of a correctly-shaped response (for a totally different idea — invent 
 
         except Exception as e:
             yield f"Error: NVIDIA NIM API failed: {e}"
-    def _call_puter(self, model_name, messages, settings):
-        if not getattr(self, "PUTER_TOKEN", None) or not self.PUTER_TOKEN:
-            yield "Error: PUTER_TOKEN not found in environment (.env)"
-            return
-
-        try:
-            # Re-use the http_client connection pool via Puter's OpenAI endpoint
-            cache_key = "puter_" + self.PUTER_TOKEN
-            if cache_key not in self.api_clients_cache:
-                self.api_clients_cache[cache_key] = OpenAI(
-                    base_url="https://api.puter.com/puterai/openai/v1",
-                    api_key=self.PUTER_TOKEN,
-                    max_retries=0,
-                    http_client=self.http_client
-                )
-            client = self.api_clients_cache[cache_key]
-
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=settings.get("temperature", 0.7),
-                max_tokens=settings.get("max_tokens", 500),
-                top_p=settings.get("top_p", 0.9),
-                stream=True
-            )
-
-            first_token_time = None
-            MAX_GENERATION_TIME = 20.0
-
-            for chunk in response:
-                current_time = time.time()
-
-                # Auto-kill tripwire logic
-                if first_token_time is None:
-                    first_token_time = current_time
-                elif (current_time - first_token_time) > MAX_GENERATION_TIME:
-                    yield f"\n\n[⚠️ AUTO-KILL: Model was too slow. Connection severed.]"
-                    response.close()
-                    break
-
-                # Safely check if delta exists
-                if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    if delta is not None and getattr(delta, 'content', None) is not None:
-                        yield delta.content
-            return
-
-        except Exception as e:
-            yield f"Error: Puter API failed: {e}"
-    def _call_jiekou(self, model_name, messages, settings):
-        if not getattr(self, "JIEKOU_KEY", None) or not self.JIEKOU_KEY:
-            yield "Error: JIEKOU_API_KEY not found in environment (.env)"
-            return
-
-        try:
-            cache_key = "jiekou_" + self.JIEKOU_KEY
-            if cache_key not in self.api_clients_cache:
-                self.api_clients_cache[cache_key] = OpenAI(
-                    base_url="https://api.jiekou.ai/openai",
-                    api_key=self.JIEKOU_KEY,
-                    max_retries=0,
-                    http_client=self.http_client
-
-                )
-            client = self.api_clients_cache[cache_key]
-
-            # --- NEW: Add top-level cache flag for proxies ---
-            extra_body = {}
-            if "claude" in model_name.lower():
-                extra_body["cache_control"] = {"type": "ephemeral"}
-
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=settings.get("temperature", 0.7),
-                max_tokens=settings.get("max_tokens", 500),
-                top_p=settings.get("top_p", 0.9),
-                extra_body=extra_body, # <-- INJECT IT HERE
-                stream=True
-            )
-
-            first_token_time = None
-            MAX_GENERATION_TIME = 20.0
-            for chunk in response:
-                current_time = time.time()
-
-                # Auto-kill tripwire logic to keep app responsive
-                if first_token_time is None:
-                    first_token_time = current_time
-                elif (current_time - first_token_time) > MAX_GENERATION_TIME:
-                    yield f"\n\n[⚠️ AUTO-KILL: Model was too slow. Connection severed.]"
-                    response.close()
-                    break
-
-                # Safely parse streaming chunks
-                if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    if delta is not None and getattr(delta, 'content', None) is not None:
-                        yield delta.content
-            return
-
-        except Exception as e:
-            import traceback  # <--- ADD THIS
-            print(f"\n🚨 JIEKOU ERROR TRACE 🚨\n{traceback.format_exc()}\n")
-            yield f"Error: Jiekou AI API failed: {e}"
+    
+    
     def _call_cohere(self, model_name: str, messages: list, settings: dict):
         """
         Handles streaming requests to Cohere using the OpenAI Compatibility Layer.
@@ -1640,10 +1537,14 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                     api_key=self.COHERE_KEY,
                     max_retries=0,
                     http_client=self.http_client
-
                 )
 
             client = self.api_clients_cache[cache_key]
+
+            # --- NEW: Add extra_body to trigger thinking mode for Command A+ ---
+            extra_body = {}
+            if "command-a-plus" in model_name.lower():
+                extra_body["thinking"] = {"type": "enabled"}
 
             # Execute the streaming chat completion request
             response = client.chat.completions.create(
@@ -1651,6 +1552,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
                 messages=messages,
                 temperature=settings.get("temperature", 0.3),
                 max_tokens=settings.get("max_tokens", 1000),
+                extra_body=extra_body,  # <-- INJECT IT HERE
                 stream=True
             )
 
@@ -1665,83 +1567,7 @@ Example of a correctly-shaped response (for a totally different idea — invent 
 
         except Exception as e:
             yield f"Error: Cohere API failed: {e}"
-    def _call_modal_endpoint(self, url, messages, settings):
-        try:
-            # Extract the user's latest content safely
-            prompt_text = messages[-1]["content"] if messages else ""
-
-            payload = {
-                "prompt": prompt_text,
-                "temperature": settings.get("temperature", 0.7),
-                "max_tokens": settings.get("max_tokens", 500)
-            }
-
-            # Using the httpx client to handle the POST stream seamlessly
-            with httpx.Client() as client:
-                response = client.post(url, json=payload, timeout=45.0)
-                response.raise_for_status()
-                result = response.json()
-
-                # Yield back text to support your generator pipeline architecture
-                yield result.get("text", "")
-
-        except Exception as e:
-            yield f"Error connecting to Modal engine matrix: {e}"
-
-    def _call_cloud_with_rotation(self, model_name, messages, settings, locked_providers=None):
-        total_apis = len(self.CLOUD_APIS)
-        for _ in range(total_apis):
-            api = self.CLOUD_APIS[self.current_api_index]
-            if not api["api_key"]:
-                self.current_api_index = (self.current_api_index + 1) % total_apis
-                continue
-            try:
-                # Use a similar caching method for OpenRouter
-                cache_key = api["api_key"]
-                if cache_key not in self.api_clients_cache:
-                    self.api_clients_cache[cache_key] = OpenAI(
-                        base_url=api["base_url"],
-                        api_key=cache_key,
-                        max_retries=0
-
-                    )
-                temp_client = self.api_clients_cache[cache_key]
-                extra_body = {}
-                if "repetition_penalty" in settings: extra_body["repetition_penalty"] = settings["repetition_penalty"]
-                if "top_k" in settings: extra_body["top_k"] = settings["top_k"]
-
-                # --- NEW: Add Auto-Caching for OpenRouter Claude ---
-                if "claude" in model_name.lower():
-                    extra_body["cache_control"] = {"type": "ephemeral"}
-
-                if locked_providers:
-                    extra_body["provider"] = {
-                        "order": locked_providers,
-                        "allow_fallbacks": False
-                    }
-                    print(f"[🔒 LOCK] {model_name} → {locked_providers}")
-
-                response = temp_client.chat.completions.create(
-                    model=model_name, messages=messages,
-                    temperature=settings.get("temperature", 0.7),
-                    max_tokens=settings.get("max_tokens", 500),
-                    top_p=settings.get("top_p", 0.9),
-                    extra_body=extra_body, stream=True # <-- REMOVE the old timeout=60 from here
-                )
-                for chunk in response:
-                    if hasattr(chunk, 'choices') and len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
-                        yield chunk.choices[0].delta.content
-                return
-
-            except Exception as e:
-                err_msg = str(e)
-                if locked_providers and ("provider" in err_msg.lower() or "no endpoints" in err_msg.lower()):
-                    yield f"Error: Provider '{locked_providers}' unavailable for '{model_name}'. Not falling back to protect credits."
-                    return
-                print(f"API {api['name']} failed: {e}")
-                self.current_api_index = (self.current_api_index + 1) % total_apis
-
-        yield "Error: All cloud APIs failed."
+    
     def get_fact_string(self, character, chat_id):
         # Moved to memory_context.py (MemoryContextEngine) — see that file.
         return self.memory_context.get_fact_string(character, chat_id)
