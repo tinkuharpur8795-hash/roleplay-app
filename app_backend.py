@@ -223,32 +223,20 @@ class RoleplayBackend:
                 "name": "Sao10K/L3-70B-Euryale-v2.1",
                 "size_b": 12,
                 },
+            "Meganova-Nevoria-70b": {
+                "type": "cloud",
+                "provider": "meganova",
+                "name": "Steelskull/L3.3-MS-Nevoria-70b",
+                "size_b": 12,
+                },
+            "Meganova Sapphira-70b": {
+                "type": "cloud",
+                "provider": "meganova",
+                "name": "BruhzWater/Sapphira-L3.3-70b-0.1",
+                "size_b": 12,
+                },
          
-           "Mistral Mixtral 8x22B": {
-                "type": "cloud",
-                "provider": "mistral",
-                "name": "open-mixtral-8x22b",
-                "size_b": 141, # 8x22B totals 141B parameters (39B active)
-            },
-            "Mistral Large": {
-                "type": "cloud",
-                "provider": "mistral",
-                "name": "mistral-large-latest",
-                "size_b": 123,
-            },
-            "Mistral Mixtral medium 22B": {
-                "type": "cloud",
-                "provider": "mistral",
-                "name": "mistral-medium-3-5",
-                "size_b": 141, 
-            },
-                            
-            "mistral-small-2501": {
-                "type": "cloud",
-                "provider": "mistral",
-                "name": "mistral-small-2501",
-                "size_b": 24,
-            },
+           
             "Cohere Command R+": {
                 "type": "cloud",
                 "provider": "cohere",
@@ -258,7 +246,7 @@ class RoleplayBackend:
             "Cohere Command A+": {
                 "type": "cloud",
                 "provider": "cohere",
-                "name": "command-a-03-2025",
+                "name": "command-a-plus-05-2026",
                 "size_b": 35,
             },
             "Morph MiniMax M3": {
