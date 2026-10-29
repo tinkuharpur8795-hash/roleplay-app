@@ -235,7 +235,12 @@ class RoleplayBackend:
                 "name": "BruhzWater/Sapphira-L3.3-70b-0.1",
                 "size_b": 12,
                 },
-         
+            "Nvidia GLM 5.3_flash": {
+                "type": "cloud",
+                "provider": "nvidia",
+                "name": "z-ai/glm-5.3-flash",
+                "size_b": 300,
+                },
            
             "Cohere Command R+": {
                 "type": "cloud",
