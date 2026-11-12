@@ -241,6 +241,13 @@ class RoleplayBackend:
                 "name": "z-ai/glm-5.3-flash",
                 "size_b": 300,
                 },
+
+            "LLM7 GPT-4o Mini": {
+                "type": "cloud",
+                "provider": "llm7",
+                "name": "gpt-4o-mini-2024-07-18", 
+                "size_b": None,
+            },
            
             "Cohere Command R+": {
                 "type": "cloud",
@@ -1233,7 +1240,10 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         elif provider == "puter":
             return self._call_puter(model_name, messages, settings)
         elif provider == "jiekou":
+        
             return self._call_jiekou(model_name, messages, settings)
+        elif provider == "llm7":
+            return self._call_llm7(model_name, messages, settings)
         elif provider == "modal":
             return self._call_modal_endpoint(model_info["url"], messages, settings)
         elif provider == "cohere":
@@ -1523,7 +1533,52 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         except Exception as e:
             yield f"Error: NVIDIA NIM API failed: {e}"
     
-    
+    def _call_llm7(self, model_name, messages, settings):
+        if not hasattr(self, "LLM7_KEY") or not self.LLM7_KEY:
+            yield "Error: LLM7_KEY not found in environment (.env)"
+            return
+
+        try:
+            # Re-use the http_client connection pool for speed
+            cache_key = "llm7_" + self.LLM7_KEY
+            if cache_key not in self.api_clients_cache:
+                self.api_clients_cache[cache_key] = OpenAI(
+                    base_url="https://api.llm7.io/v1",
+                    api_key=self.LLM7_KEY,
+                    max_retries=0,
+                    http_client=self.http_client
+                )
+            client = self.api_clients_cache[cache_key]
+
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=settings.get("temperature", 0.7),
+                max_tokens=settings.get("max_tokens", 500),
+                top_p=settings.get("top_p", 0.9),
+                stream=True
+            )
+
+            first_token_time = None
+            MAX_GENERATION_TIME = 20.0
+
+            for chunk in response:
+                current_time = time.time()
+
+                # Auto-kill tripwire logic
+                if first_token_time is None:
+                    first_token_time = current_time
+                elif (current_time - first_token_time) > MAX_GENERATION_TIME:
+                    yield f"\n\n[⚠️ AUTO-KILL: Model was too slow. Connection severed.]"
+                    response.close()
+                    break
+
+                if hasattr(chunk, 'choices') and len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+            return
+
+        except Exception as e:
+            yield f"Error: LLM7 API failed: {e}"
     def _call_cohere(self, model_name: str, messages: list, settings: dict):
         """
         Handles streaming requests to Cohere using the OpenAI Compatibility Layer.
