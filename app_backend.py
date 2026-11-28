@@ -205,7 +205,13 @@ class RoleplayBackend:
             "Kilo minimax/minimax-m3:free": {
                 "type": "cloud",
                 "provider": "kilo",
-                "name": "MiniMax: MiniMax M3 (free)",
+                "name": "minimax/minimax-m3:free",
+                "size_b": 200,   # keep whatever you use this field for; real size isn't on the listing
+                },
+            "Kilo minimax/minimax-m3:fre": {
+                "type": "cloud",
+                "provider": "kilo",
+                "name": "MiniMax: MiniMax M2.7 (free)",
                 "size_b": 200,   # keep whatever you use this field for; real size isn't on the listing
                 },
             
