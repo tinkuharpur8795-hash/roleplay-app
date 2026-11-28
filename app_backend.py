@@ -187,6 +187,7 @@ class RoleplayBackend:
         self.COHERE_KEY = os.getenv("COHERE_API_KEY")
         self.PINECONE_KEY = os.getenv("PINECONE_API_KEY")
         self.MORPH_KEY = os.getenv("MORPH_API_KEY")
+        self.KILO_KEY = os.getenv("KILO_API_KEY")
         self.MODEL_OPTIONS = {
             # === FRONT-END CHAT MODELS (Creative, Fast, Roleplay-Focused) ===
 
@@ -200,6 +201,12 @@ class RoleplayBackend:
                 "name": "mistralai/mistral-nemo",
                 "providers": ["DeepInfra"],
                 "size_b": 12,
+                },
+            "Kilo GLM 5 (free)": {
+                "type": "cloud",
+                "provider": "kilo",
+                "name": "z-ai/glm-5:free",
+                "size_b": 0,   # keep whatever you use this field for; real size isn't on the listing
                 },
             
             
@@ -1242,6 +1249,8 @@ Example of a correctly-shaped response (for a totally different idea — invent 
         elif provider == "jiekou":
         
             return self._call_jiekou(model_name, messages, settings)
+        elif provider == "kilo":
+            return self._call_kilo(model_name, messages, settings)
         elif provider == "llm7":
             return self._call_llm7(model_name, messages, settings)
         elif provider == "modal":
@@ -1532,6 +1541,59 @@ Example of a correctly-shaped response (for a totally different idea — invent 
 
         except Exception as e:
             yield f"Error: NVIDIA NIM API failed: {e}"
+        def _call_kilo(self, model_name, messages, settings):
+        if not getattr(self, "KILO_KEY", None):
+            yield "Error: KILO_API_KEY not found in environment (.env)"
+            return
+
+        try:
+            cache_key = "kilo_" + self.KILO_KEY
+            if cache_key not in self.api_clients_cache:
+                self.api_clients_cache[cache_key] = OpenAI(
+                    base_url="https://api.kilo.ai/api/gateway",
+                    api_key=self.KILO_KEY,
+                    max_retries=0,
+                    http_client=self.http_client,
+                )
+            client = self.api_clients_cache[cache_key]
+
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=settings.get("temperature", 0.8),
+                # reasoning tokens may count against this limit, so don't keep it at 500
+                max_tokens=max(settings.get("max_tokens", 500), 1500),
+                top_p=settings.get("top_p", 0.9),
+                stream=True,
+            )
+
+            first_token_time = None
+            MAX_GENERATION_TIME = 20.0
+
+            for chunk in response:
+                if not getattr(chunk, "choices", None):
+                    continue
+
+                delta = chunk.choices[0].delta
+                text = getattr(delta, "content", None)
+                if not text:
+                    # skips reasoning-only chunks (reasoning_content) and empty ones
+                    continue
+
+                # start the timer on the first real reply token, not on thinking chunks
+                now = time.time()
+                if first_token_time is None:
+                    first_token_time = now
+                elif now - first_token_time > MAX_GENERATION_TIME:
+                    yield "\n\n[⚠️ AUTO-KILL: Model was too slow. Connection severed.]"
+                    response.close()
+                    break
+
+                yield text
+            return
+
+        except Exception as e:
+            yield f"Error: Kilo API failed: {e}"
     
     def _call_llm7(self, model_name, messages, settings):
         if not hasattr(self, "LLM7_KEY") or not self.LLM7_KEY:
