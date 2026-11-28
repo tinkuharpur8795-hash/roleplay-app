@@ -1541,7 +1541,8 @@ Example of a correctly-shaped response (for a totally different idea — invent 
 
         except Exception as e:
             yield f"Error: NVIDIA NIM API failed: {e}"
-        def _call_kilo(self, model_name, messages, settings):
+
+    def _call_kilo(self, model_name, messages, settings):
         if not getattr(self, "KILO_KEY", None):
             yield "Error: KILO_API_KEY not found in environment (.env)"
             return
