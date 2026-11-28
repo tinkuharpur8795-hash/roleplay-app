@@ -202,11 +202,11 @@ class RoleplayBackend:
                 "providers": ["DeepInfra"],
                 "size_b": 12,
                 },
-            "Kilo GLM 5 (free)": {
+            "Kilo minimax/minimax-m3:free": {
                 "type": "cloud",
                 "provider": "kilo",
-                "name": "z-ai/glm-5:free",
-                "size_b": 0,   # keep whatever you use this field for; real size isn't on the listing
+                "name": "minimax/minimax-m3:free",
+                "size_b": 200,   # keep whatever you use this field for; real size isn't on the listing
                 },
             
             
